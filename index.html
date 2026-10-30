@@ -1,0 +1,2679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>AvaTune</title>
+<meta name="description" content="AvaTune is a modern music discovery & streaming player. Audio via the Audius API, catalog metadata via the iTunes Search API." />
+<meta name="theme-color" content="#0A1230" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='48' y2='48' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%23FFB4D2'/%3E%3Cstop offset='.55' stop-color='%23FF6FAE'/%3E%3Cstop offset='1' stop-color='%23E14E8F'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill-rule='evenodd' fill='url(%23g)' d='M24 4 44 42h-9.6L24 20.6 13.6 42H4Z M21.2 26.8 28.4 32l-7.2 5.2Z'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+<style type="text/tailwindcss">
+@theme {
+  --color-ink: #0A1230;        /* page background         */
+  --color-deep: #101C3C;      /* deep blue surface       */
+  --color-navy: #1B2B52;      /* secondary blue surface  */
+  --color-lift: #16244B;      /* raised card hover       */
+  --color-line: rgba(170,183,208,.12);
+  --color-pink: #FF6FAE;      /* bubblegum pink accent   */
+  --color-blush: #FFB4D2;     /* soft pink               */
+  --color-mist: #AAB7D0;      /* muted text              */
+  --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+</style>
+
+<style>
+/* ================================================================
+   AFTERGLOW · DESIGN SYSTEM  (src/styles/input.css equivalent)
+   ================================================================ */
+:root { color-scheme: dark; }
+* { -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  background: #0A1230;
+  color: #fff;
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  overflow: hidden;
+}
+::selection { background: rgba(255,111,174,.35); }
+
+/* ---------- scrollbars ---------- */
+.scroll-slim { scrollbar-width: thin; scrollbar-color: #26355e transparent; }
+.scroll-slim::-webkit-scrollbar { width: 10px; height: 10px; }
+.scroll-slim::-webkit-scrollbar-thumb { background: #26355e; border-radius: 99px; border: 3px solid #0A1230; }
+.scroll-slim::-webkit-scrollbar-track { background: transparent; }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ---------- typography helpers ---------- */
+.font-display { font-family: "Sora", ui-sans-serif, system-ui, sans-serif; }
+.line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- focus ---------- */
+:focus-visible { outline: 2px solid #FF6FAE; outline-offset: 2px; border-radius: 6px; }
+button { cursor: pointer; }
+
+/* ---------- app frame ---------- */
+#shell { display:block; }
+@media (min-width: 1024px) {
+  #shell { display:grid; grid-template-columns: 264px minmax(0,1fr); }
+  #view-wrap { height: calc(100vh - 92px); }
+}
+#view { -webkit-overflow-scrolling: touch; }
+@media (max-width: 1023.98px) { #view::after { content: ""; display: block; height: 70px; } }
+@media (max-width: 1023.98px) { #view::after { content: ""; display: block; height: 76px; } }
+
+/* ---------- cards & rows ---------- */
+.card {
+  background: #101C3C;
+  border: 1px solid rgba(170,183,208,.10);
+  transition: transform .25s cubic-bezier(.2,.7,.2,1), background .25s, border-color .25s, box-shadow .25s;
+}
+.card:hover { background: #16244B; border-color: rgba(170,183,208,.2); transform: translateY(-3px); box-shadow: 0 18px 40px -18px rgba(2,6,20,.85); }
+.trow { transition: background .18s ease; border-radius: 10px; }
+.trow:hover, .trow:focus-visible { background: rgba(27,43,82,.72); }
+.trow.playing { background: linear-gradient(90deg, rgba(255,111,174,.13), rgba(27,43,82,.35)); }
+.trow.playing .trow-title { color: #FFB4D2; }
+
+/* play button reveal on hover for cards */
+.card .hover-play { opacity: 0; transform: translateY(10px); transition: opacity .22s ease, transform .22s cubic-bezier(.2,.8,.2,1); }
+.card:hover .hover-play, .card:focus-within .hover-play { opacity: 1; transform: translateY(0); }
+@media (hover: none) { .card .hover-play { opacity: 1; transform: none; } }
+
+/* ---------- skeletons ---------- */
+.sk { position: relative; overflow: hidden; background: #16224a; }
+.sk::after {
+  content:""; position:absolute; inset:0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.07) 50%, transparent 80%);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%);} to { transform: translateX(100%);} }
+
+/* ---------- range inputs ---------- */
+input[type="range"].ag { -webkit-appearance:none; appearance:none; background:transparent; height:20px; width:100%; }
+input[type="range"].ag::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 99px;
+  background: linear-gradient(to right, #FF6FAE 0%, #FF6FAE var(--fill,0%), rgba(170,183,208,.25) var(--fill,0%), rgba(170,183,208,.25) 100%);
+}
+input[type="range"].ag::-webkit-slider-thumb {
+  -webkit-appearance:none; width:13px; height:13px; margin-top:-4.5px; border-radius:99px;
+  background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.5); opacity:0; transition:opacity .15s;
+}
+input[type="range"].ag:hover::-webkit-slider-thumb, input[type="range"].ag:focus-visible::-webkit-slider-thumb, .always-thumb input[type="range"].ag::-webkit-slider-thumb { opacity:1; }
+input[type="range"].ag::-moz-range-track { height:4px; border-radius:99px; background: rgba(170,183,208,.25); }
+input[type="range"].ag::-moz-range-progress { height:4px; border-radius:99px; background:#FF6FAE; }
+input[type="range"].ag::-moz-range-thumb { width:13px; height:13px; border:none; border-radius:99px; background:#fff; opacity:0; }
+input[type="range"].ag:hover::-moz-range-thumb, .always-thumb input[type="range"].ag::-moz-range-thumb { opacity:1; }
+
+/* ---------- equalizer / visualizer bars ---------- */
+.eqbar { transform-origin: bottom; background: linear-gradient(to top,#FF6FAE,#FFB4D2); border-radius: 2px 2px 0 0; width: 3px; height: 4px; transition: height .09s linear; }
+@keyframes eqfall { 0%,100% { height: 18%; } 50% { height: 85%; } }
+.eqfake .eqbar { animation: eqfall 1s ease-in-out infinite; }
+.eqfake .eqbar:nth-child(1){ animation-delay: -.9s } .eqfake .eqbar:nth-child(2){ animation-delay: -.5s }
+.eqfake .eqbar:nth-child(3){ animation-delay: -.2s } .eqfake .eqbar:nth-child(4){ animation-delay: -.7s }
+.eqfake .eqbar:nth-child(5){ animation-delay: -.35s } .eqfake .eqbar:nth-child(6){ animation-delay: -.6s }
+.eqfake .eqbar:nth-child(7){ animation-delay: -.1s } .eqfake .eqbar:nth-child(8){ animation-delay: -.8s }
+.eqpaused .eqbar { animation-play-state: paused; height: 14% !important; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.is-loading #np-play .icon-pause, .is-loading .spin-me { animation: spin 1s linear infinite; }
+
+/* ---------- now playing overlay ---------- */
+#np { transform: translateY(102%); transition: transform .45s cubic-bezier(.32,.72,.24,1); will-change: transform; }
+#np.open { transform: translateY(0); }
+.np-amb { filter: blur(90px) saturate(1.5); opacity:.5; transform: scale(1.4); }
+
+/* ---------- context menu / modal / toast ---------- */
+#menu-root > .menu { animation: pop .16s cubic-bezier(.2,.8,.2,1); }
+@keyframes pop { from { opacity:0; transform: scale(.94) translateY(6px);} }
+.modal-bg { animation: fadein .18s ease; }
+.modal-card { animation: pop .18s cubic-bezier(.2,.8,.2,1); }
+@keyframes fadein { from { opacity: 0; } }
+@keyframes toast-in { from { opacity:0; transform: translateY(14px) scale(.95); } }
+.toast { animation: toast-in .25s cubic-bezier(.2,.8,.2,1); }
+.toast.out { opacity:0; transform: translateY(8px); transition: all .3s ease; }
+
+/* ---------- misc anims ---------- */
+@keyframes fadeUp { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform:none; } }
+.fade-up { animation: fadeUp .5s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes pulsedot { 0%,100%{opacity:1} 50%{opacity:.35} }
+.live-dot { animation: pulsedot 2.2s ease-in-out infinite; }
+.marquee:hover .marquee-inner { animation: scrolltxt 8s linear infinite; }
+@keyframes scrolltxt { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+/* nav active state */
+.navlink { position: relative; transition: color .2s, background .2s; }
+.navlink.active { color:#fff; background: rgba(255,111,174,.10); }
+.navlink.active::before { content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px; border-radius:99px; background:#FF6FAE; }
+.navlink:hover { color:#fff; }
+
+/* drag highlight for queue */
+.drag-over { outline: 2px dashed #FF6FAE; outline-offset: -2px; }
+
+/* like heart pulse */
+@keyframes heartpop { 0%{transform:scale(.6)} 55%{transform:scale(1.25)} 100%{transform:scale(1)} }
+.heart-pop { animation: heartpop .35s cubic-bezier(.2,.8,.2,1); }
+
+/* artwork glow ring on now playing */
+.np-art { box-shadow: 0 30px 90px -20px rgba(255,111,174,.28), 0 20px 60px -30px rgba(0,0,0,.9); }
+img { user-select: none; -webkit-user-drag: none; }
+</style>
+</head>
+
+<body class="font-body antialiased text-white">
+<!-- ==============================================================
+     APP SHELL · layout regions
+     ============================================================== -->
+<div id="shell" class="h-[100dvh]">
+  <!-- ============ SIDEBAR (desktop) ============ -->
+  <aside class="hidden lg:flex flex-col bg-[#0C1636] border-r border-line h-full overflow-hidden">
+    <div class="px-5 pt-6 pb-4 flex items-center gap-3">
+      <svg viewBox="0 0 48 48" class="w-10 h-10 shrink-0" style="filter:drop-shadow(0 8px 20px rgba(255,111,174,.45))" role="img" aria-label="AvaTune logo"><defs><linearGradient id="ava-g1" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse"><stop stop-color="#FFB4D2"/><stop offset=".55" stop-color="#FF6FAE"/><stop offset="1" stop-color="#E14E8F"/></linearGradient></defs><path fill-rule="evenodd" fill="url(#ava-g1)" d="M24 4 44 42h-9.6L24 20.6 13.6 42H4Z M21.2 26.8 28.4 32l-7.2 5.2Z"/></svg>
+      <div>
+        <div class="font-display text-2xl leading-none tracking-tight" style="font-weight:800">AvaTune</div>
+        <div class="text-[10px] uppercase tracking-[0.2em] text-mist mt-1.5">Open Music Player</div>
+      </div>
+    </div>
+
+    <nav class="px-3 mt-2" aria-label="Primary">
+      <p class="px-3 pb-2 text-[10px] font-semibold tracking-[0.22em] text-mist/70">MENU</p>
+      <a href="#/home"    data-nav="home"    class="navlink flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-mist"><i data-lucide="home" class="w-[18px] h-[18px]"></i>Home</a>
+      <a href="#/search"  data-nav="search"  class="navlink flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-mist"><i data-lucide="search" class="w-[18px] h-[18px]"></i>Search</a>
+      <a href="#/explore" data-nav="explore" class="navlink flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-mist"><i data-lucide="compass" class="w-[18px] h-[18px]"></i>Explore</a>
+    </nav>
+
+    <nav class="px-3 mt-6" aria-label="Library">
+      <p class="px-3 pb-2 text-[10px] font-semibold tracking-[0.22em] text-mist/70">LIBRARY</p>
+      <a href="#/library" data-nav="library" class="navlink flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-mist"><i data-lucide="library" class="w-[18px] h-[18px]"></i>Your Library</a>
+      <a href="#/liked"   data-nav="liked"   class="navlink flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-mist"><i data-lucide="heart" class="w-[18px] h-[18px]"></i>Liked Songs</a>
+      <a href="#/recent"  data-nav="recent"  class="navlink flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-mist"><i data-lucide="history" class="w-[18px] h-[18px]"></i>Recently Played</a>
+      <a href="#/queue"   data-nav="queue"   class="navlink flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-mist"><i data-lucide="list-music" class="w-[18px] h-[18px]"></i>Queue</a>
+    </nav>
+
+    <div class="px-3 mt-6 flex items-center justify-between">
+      <p class="px-3 text-[10px] font-semibold tracking-[0.22em] text-mist/70">PLAYLISTS</p>
+      <button id="sb-create-pl" class="p-1.5 mr-1 rounded-lg text-mist hover:text-white hover:bg-navy transition" title="Create playlist" aria-label="Create playlist">
+        <i data-lucide="plus" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div id="sb-playlists" class="px-3 mt-1 flex-1 overflow-y-auto scroll-slim pb-4"></div>
+
+    <div class="px-6 py-4 border-t border-line text-[11px] leading-relaxed text-mist/70">
+      Audio via <a class="text-blush hover:text-pink transition" href="https://audius.co" target="_blank" rel="noopener">Audius</a> ·
+      Metadata via <a class="text-blush hover:text-pink transition" href="https://performance-partners.apple.com/search-api" target="_blank" rel="noopener">iTunes Search API</a>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div id="view-wrap" class="relative flex flex-col h-[100dvh] lg:h-auto min-w-0">
+    <header class="hidden lg:flex items-center gap-3 px-6 py-3.5 bg-[#0A1230]/85 backdrop-blur-xl border-b border-line z-30">
+      <div class="flex items-center gap-1.5">
+        <button id="nav-back" class="p-2 rounded-full text-mist hover:text-white hover:bg-navy transition" aria-label="Go back"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+        <button id="nav-fwd" class="p-2 rounded-full text-mist hover:text-white hover:bg-navy transition" aria-label="Go forward"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+      </div>
+      <div class="relative flex-1 max-w-md">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-mist pointer-events-none"></i>
+        <input id="global-search" type="search" placeholder="Search tracks, artists, albums…" autocomplete="off"
+          class="w-full bg-deep border border-line rounded-full pl-10 pr-4 py-2.5 text-sm placeholder:text-mist/60 focus:border-pink/60 transition" />
+      </div>
+      <div class="ml-auto hidden xl:flex items-center gap-2 text-xs text-mist/70">
+        <span class="w-1.5 h-1.5 rounded-full bg-pink live-dot"></span>
+        <span id="clock-label">Streaming via Audius</span>
+      </div>
+    </header>
+
+    <!-- Mobile top bar -->
+    <header class="lg:hidden flex items-center gap-3 px-4 pt-4 pb-3 bg-[#0A1230]/90 backdrop-blur-xl border-b border-line z-30">
+      <svg viewBox="0 0 48 48" class="w-8 h-8 shrink-0" style="filter:drop-shadow(0 6px 16px rgba(255,111,174,.45))" role="img" aria-label="AvaTune logo"><defs><linearGradient id="ava-g2" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse"><stop stop-color="#FFB4D2"/><stop offset=".55" stop-color="#FF6FAE"/><stop offset="1" stop-color="#E14E8F"/></linearGradient></defs><path fill-rule="evenodd" fill="url(#ava-g2)" d="M24 4 44 42h-9.6L24 20.6 13.6 42H4Z M21.2 26.8 28.4 32l-7.2 5.2Z"/></svg>
+      <div class="font-display font-extrabold tracking-tight text-lg">AvaTune</div>
+      <button id="m-search-btn" class="ml-auto p-2 rounded-lg text-mist hover:text-white hover:bg-navy transition" aria-label="Search"><i data-lucide="search" class="w-5 h-5"></i></button>
+    </header>
+
+    <main id="view" class="flex-1 overflow-y-auto scroll-slim min-h-0" tabindex="-1"></main>
+  </div>
+</div>
+
+<!-- ==============================================================
+     DESKTOP PLAYER BAR
+     ============================================================== -->
+<footer id="playerbar" class="hidden lg:flex fixed bottom-0 inset-x-0 h-[92px] bg-[#0C1636]/95 backdrop-blur-xl border-t border-line z-40 items-center gap-4 px-4">
+  <!-- current track -->
+  <div class="flex items-center gap-3 w-[30%] min-w-0">
+    <button id="pb-art-btn" class="relative shrink-0 group" aria-label="Open now playing">
+      <img id="pb-art" src="" alt="" class="w-14 h-14 rounded-lg object-cover bg-navy transition group-hover:brightness-75" />
+      <span class="absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition"><i data-lucide="chevrons-up" class="w-5 h-5"></i></span>
+    </button>
+    <div class="min-w-0">
+      <div id="pb-title" class="text-sm font-semibold line-clamp-1">Nothing playing</div>
+      <button id="pb-artist" class="text-xs text-mist hover:text-blush transition line-clamp-1 text-left max-w-full">Pick something to listen to</button>
+    </div>
+    <button id="pb-like" class="p-2 rounded-full text-mist hover:text-pink transition shrink-0" aria-label="Like track"><i data-lucide="heart" class="w-[18px] h-[18px]"></i></button>
+  </div>
+
+  <!-- transport -->
+  <div class="flex flex-col items-center flex-1 max-w-[46%] gap-1">
+    <div class="flex items-center gap-2">
+      <button id="pb-shuffle" class="p-2 rounded-full text-mist hover:text-white transition relative" aria-label="Shuffle"><i data-lucide="shuffle" class="w-4 h-4"></i></button>
+      <button id="pb-prev" class="p-2 rounded-full text-mist hover:text-white transition" aria-label="Previous track"><i data-lucide="skip-back" class="w-5 h-5 fill-current"></i></button>
+      <button id="pb-play" class="w-10 h-10 rounded-full bg-white text-[#101C3C] grid place-items-center hover:scale-105 hover:bg-blush active:scale-95 transition" aria-label="Play or pause"><i data-lucide="play" class="w-5 h-5 fill-current ml-0.5"></i></button>
+      <button id="pb-next" class="p-2 rounded-full text-mist hover:text-white transition" aria-label="Next track"><i data-lucide="skip-forward" class="w-5 h-5 fill-current"></i></button>
+      <button id="pb-repeat" class="p-2 rounded-full text-mist hover:text-white transition relative" aria-label="Repeat mode"><i data-lucide="repeat" class="w-4 h-4"></i></button>
+    </div>
+    <div class="flex items-center gap-2.5 w-full">
+      <span id="pb-cur" class="text-[11px] tabular-nums text-mist w-9 text-right">0:00</span>
+      <input id="pb-seek" type="range" class="ag flex-1" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+      <span id="pb-dur" class="text-[11px] tabular-nums text-mist w-9">0:00</span>
+    </div>
+  </div>
+
+  <!-- right cluster -->
+  <div class="flex items-center gap-1.5 w-[30%] justify-end">
+    <div id="viz" class="hidden xl:flex items-end gap-[3px] h-5 w-12 mr-1" aria-hidden="true"></div>
+    <button id="pb-queue" class="p-2 rounded-full text-mist hover:text-white transition" aria-label="Queue" title="Queue"><i data-lucide="list-music" class="w-[18px] h-[18px]"></i></button>
+    <button id="pb-lyrics" class="p-2 rounded-full text-mist hover:text-white transition" aria-label="Lyrics" title="Lyrics"><i data-lucide="mic-vocal" class="w-[18px] h-[18px]"></i></button>
+    <button id="pb-mute" class="p-2 rounded-full text-mist hover:text-white transition" aria-label="Mute"><i data-lucide="volume-2" class="w-[18px] h-[18px]"></i></button>
+    <div class="w-24 always-thumb"><input id="pb-vol" type="range" class="ag" min="0" max="1" step="0.01" value="0.8" aria-label="Volume" /></div>
+    <button id="pb-expand" class="p-2 rounded-full text-mist hover:text-white transition" aria-label="Expand player"><i data-lucide="maximize-2" class="w-4 h-4"></i></button>
+  </div>
+</footer>
+
+<!-- ==============================================================
+     MOBILE: MINI PLAYER + BOTTOM NAV
+     ============================================================== -->
+<div class="lg:hidden fixed bottom-0 inset-x-0 z-40">
+  <div id="mini" class="hidden mx-2 mb-2 rounded-2xl bg-[#1B2B52]/95 backdrop-blur-xl border border-line shadow-[0_10px_40px_-10px_rgba(0,0,0,.8)] overflow-hidden">
+    <div class="relative h-[58px] flex items-center gap-1 px-2">
+      <img id="mp-art" src="" alt="" class="w-10 h-10 rounded-[10px] object-cover bg-ink shrink-0 ring-1 ring-white/10" />
+      <div class="min-w-0 flex-1 mr-1">
+        <div id="mp-title" class="text-[13px] font-semibold line-clamp-1"></div>
+        <div id="mp-artist" class="text-[11px] text-mist line-clamp-1"></div>
+      </div>
+      <div class="flex items-center shrink-0">
+        <button id="mp-shuffle" class="relative p-2.5 text-mist active:scale-90 transition" aria-label="Shuffle"><i data-lucide="shuffle" class="w-[17px] h-[17px]"></i></button>
+        <button id="mp-prev" class="p-2.5 text-mist active:scale-90 transition" aria-label="Previous track"><i data-lucide="skip-back" class="w-[20px] h-[20px] fill-current"></i></button>
+        <button id="mp-play" class="w-10 h-10 mx-0.5 rounded-full bg-white text-deep grid place-items-center shadow-[0_4px_16px_-4px_rgba(255,180,210,.5)] active:scale-90 transition" aria-label="Play or pause"><i data-lucide="play" class="w-[18px] h-[18px] fill-current ml-0.5"></i></button>
+        <button id="mp-next" class="p-2.5 text-mist active:scale-90 transition" aria-label="Next track"><i data-lucide="skip-forward" class="w-[20px] h-[20px] fill-current"></i></button>
+        <button id="mp-repeat" class="relative p-2.5 hidden min-[420px]:block text-mist active:scale-90 transition" aria-label="Repeat mode"><i data-lucide="repeat" class="w-[17px] h-[17px]"></i></button>
+        <button id="mp-like" class="p-2.5 hidden min-[420px]:block text-mist active:scale-90 transition" aria-label="Like"><i data-lucide="heart" class="w-[18px] h-[18px]"></i></button>
+      </div>
+      <div class="absolute bottom-0 inset-x-0 h-[2px]"><div id="mp-prog" class="h-full rounded-full bg-gradient-to-r from-pink to-blush shadow-[0_0_8px_rgba(255,111,174,.8)]" style="width:0%"></div></div>
+    </div>
+  </div>
+  <nav class="bg-[#0C1636]/95 backdrop-blur-xl border-t border-line grid grid-cols-4 px-2 pb-[env(safe-area-inset-bottom)]" aria-label="Mobile">
+    <a href="#/home"    data-nav="home"    class="mnav flex flex-col items-center gap-1 py-2.5 text-mist"><i data-lucide="home" class="w-5 h-5"></i><span class="text-[10px] font-medium">Home</span></a>
+    <a href="#/search"  data-nav="search"  class="mnav flex flex-col items-center gap-1 py-2.5 text-mist"><i data-lucide="search" class="w-5 h-5"></i><span class="text-[10px] font-medium">Search</span></a>
+    <a href="#/explore" data-nav="explore" class="mnav flex flex-col items-center gap-1 py-2.5 text-mist"><i data-lucide="compass" class="w-5 h-5"></i><span class="text-[10px] font-medium">Explore</span></a>
+    <a href="#/library" data-nav="library" class="mnav flex flex-col items-center gap-1 py-2.5 text-mist"><i data-lucide="library" class="w-5 h-5"></i><span class="text-[10px] font-medium">Library</span></a>
+  </nav>
+</div>
+
+<!-- ==============================================================
+     NOW PLAYING OVERLAY
+     ============================================================== -->
+<div id="np" class="fixed inset-0 z-50 bg-[#0A1230] lg:bg-[#0A1230]/97 overflow-hidden" role="dialog" aria-modal="true" aria-label="Now playing">
+  <div class="absolute inset-0 overflow-hidden pointer-events-none"><img id="np-amb" src="" alt="" class="np-amb absolute inset-0 w-full h-full object-cover" /></div>
+  <div class="absolute inset-0 bg-gradient-to-b from-[#0A1230]/40 via-[#0A1230]/80 to-[#0A1230] pointer-events-none"></div>
+
+  <div class="relative h-full flex flex-col max-w-6xl mx-auto px-5 lg:px-10 pb-6 lg:pb-8">
+    <div class="flex items-center justify-between py-4">
+      <button id="np-close" class="p-2.5 rounded-full hover:bg-white/10 text-mist hover:text-white transition" aria-label="Close now playing"><i data-lucide="chevron-down" class="w-6 h-6"></i></button>
+      <div class="text-[10px] font-semibold tracking-[0.3em] text-mist uppercase">Now Playing</div>
+      <button id="np-menu" class="p-2.5 rounded-full hover:bg-white/10 text-mist hover:text-white transition" aria-label="More options"><i data-lucide="ellipsis" class="w-5 h-5"></i></button>
+    </div>
+
+    <div class="flex-1 min-h-0 grid lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] gap-8 lg:gap-14 items-center overflow-y-auto scroll-slim no-scrollbar">
+      <!-- art -->
+      <div class="mx-auto w-full max-w-[320px] md:max-w-[380px] lg:max-w-none">
+        <div class="relative">
+          <img id="np-art" src="" alt="Track artwork" class="np-art w-full aspect-square rounded-2xl object-cover bg-navy" />
+        </div>
+        <canvas id="np-viz" class="w-full h-16 lg:h-20 mt-3 lg:mt-5" aria-hidden="true"></canvas>
+      </div>
+
+      <!-- info + controls -->
+      <div class="w-full max-w-xl mx-auto lg:mx-0">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h2 id="np-title" class="font-display font-bold text-2xl lg:text-3xl tracking-tight line-clamp-2"></h2>
+            <button id="np-artist" class="mt-1.5 text-mist hover:text-blush transition text-left lg:text-lg"></button>
+            <div id="np-meta" class="mt-2 text-xs text-mist/80 flex flex-wrap gap-x-3 gap-y-1"></div>
+          </div>
+          <button id="np-like" class="p-3 rounded-full bg-white/5 border border-line text-mist hover:text-pink transition shrink-0" aria-label="Like track"><i data-lucide="heart" class="w-5 h-5"></i></button>
+        </div>
+
+        <div class="mt-6">
+          <input id="np-seek" type="range" class="ag w-full" min="0" max="1000" step="1" value="0" aria-label="Seek" />
+          <div class="flex justify-between text-[11px] tabular-nums text-mist mt-1"><span id="np-cur">0:00</span><span id="np-dur">0:00</span></div>
+        </div>
+
+        <div class="mt-4 flex items-center justify-center gap-3 lg:gap-5">
+          <button id="np-shuffle" class="p-3 rounded-full text-mist hover:text-white transition" aria-label="Shuffle"><i data-lucide="shuffle" class="w-5 h-5"></i></button>
+          <button id="np-prev" class="p-3 rounded-full text-mist hover:text-white transition" aria-label="Previous"><i data-lucide="skip-back" class="w-7 h-7 fill-current"></i></button>
+          <button id="np-play" class="w-16 h-16 rounded-full bg-pink text-white grid place-items-center shadow-[0_12px_40px_-8px_rgba(255,111,174,.65)] hover:scale-105 hover:bg-blush hover:text-deep active:scale-95 transition" aria-label="Play or pause"><i data-lucide="play" class="w-7 h-7 fill-current ml-1"></i></button>
+          <button id="np-next" class="p-3 rounded-full text-mist hover:text-white transition" aria-label="Next"><i data-lucide="skip-forward" class="w-7 h-7 fill-current"></i></button>
+          <button id="np-repeat" class="p-3 rounded-full text-mist hover:text-white transition" aria-label="Repeat"><i data-lucide="repeat" class="w-5 h-5"></i></button>
+        </div>
+
+        <div class="mt-5 flex items-center gap-3 max-w-xs mx-auto">
+          <button id="np-mute" class="p-2 text-mist hover:text-white transition" aria-label="Mute"><i data-lucide="volume-2" class="w-4 h-4"></i></button>
+          <input id="np-vol" type="range" class="ag flex-1" min="0" max="1" step="0.01" aria-label="Volume" />
+        </div>
+
+        <!-- tabs: up next / lyrics -->
+        <div class="mt-6 border-t border-line pt-4">
+          <div class="flex gap-2 mb-3">
+            <button class="np-tab px-4 py-1.5 rounded-full text-xs font-semibold bg-pink text-white" data-tab="queue">Up Next</button>
+            <button class="np-tab px-4 py-1.5 rounded-full text-xs font-semibold bg-white/5 text-mist hover:text-white transition" data-tab="lyrics">Lyrics</button>
+          </div>
+          <div id="np-queue-panel" class="max-h-56 overflow-y-auto scroll-slim pr-1"></div>
+          <div id="np-lyrics-panel" class="hidden max-h-56 overflow-y-auto scroll-slim pr-1"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- portal roots -->
+<div id="menu-root"></div>
+<div id="modal-root"></div>
+<div id="toast-root" class="fixed bottom-[150px] lg:bottom-28 left-1/2 -translate-x-1/2 z-[70] flex flex-col items-center gap-2 pointer-events-none"></div>
+
+<!-- single shared audio element for the entire app -->
+<audio id="audio" crossorigin="anonymous" preload="none"></audio>
+
+<script>
+"use strict";
+/*  ================================================================
+    AFTERGLOW · application modules
+    Single-file build — the sections below mirror the requested
+    modular project structure one-to-one:
+
+      §1  utils/          helpers, debounce, formatTime
+      §2  storage/        versioned localStorage schema
+      §3  state.js        event bus, track cache, list contexts
+      §4  components/     toast, icons        (more in later chunks)
+      §5  api/audius.js   streaming + discovery      [chunk 2]
+      §6  api/itunes.js   metadata + artwork         [chunk 2]
+      §7  api/matcher.js  Audius ⇄ iTunes matching   [chunk 2]
+      §8  audio/engine    centralized audio engine   [chunk 3]
+      §9  components/     player, menus, modals      [chunk 3]
+      §10 pages/ + router all views                  [chunk 4]
+    ================================================================ */
+
+/* ================================================================
+   §1 · utils/ — helpers.js, debounce.js, formatTime.js
+   ================================================================ */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const debounce = (fn, ms = 300) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+
+function fmtTime(sec) {
+  if (!isFinite(sec) || sec < 0) sec = 0;
+  sec = Math.round(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+}
+const fmtNum = (n) => {
+  n = +n || 0;
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+  return String(n);
+};
+const timeAgo = (ts) => {
+  const d = Date.now() - ts, m = 6e4, h = 36e5, day = 864e5;
+  if (d < m) return "just now";
+  if (d < h) return Math.floor(d / m) + "m ago";
+  if (d < day) return Math.floor(d / h) + "h ago";
+  if (d < day * 7) return Math.floor(d / day) + "d ago";
+  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
+const uid = () => "pl-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+/* Fallback artwork (palette-consistent, inline so it never 404s) */
+const FALLBACK_ART = "data:image/svg+xml," + encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#1B2B52'/><stop offset='1' stop-color='#101C3C'/></linearGradient></defs><rect width='600' height='600' fill='url(#g)'/><g stroke='#FF6FAE' stroke-width='16' stroke-linecap='round' opacity='.85'><path d='M250 340v-90M300 380v-160M350 320v-40'/></g><circle cx='300' cy='460' r='7' fill='#FFB4D2'/></svg>`);
+window.imgFallback = (el) => { el.onerror = null; if (el.src !== FALLBACK_ART) el.src = FALLBACK_ART; };
+
+/* ================================================================
+   §2 · storage/localStorage.js — versioned, hardened persistence
+   ================================================================ */
+const Store = {
+  KEY: "afterglow.v1",
+  defaults: () => ({
+    v: 1,
+    liked: {},            // id -> {track, at}
+    likedOrder: [],       // ids, newest first
+    playlists: [],        // {id,name,createdAt,tracks:[track]}
+    recent: [],           // [{track, at}]
+    prefs: { volume: 0.8, muted: false, shuffle: false, repeat: "off" },
+    queue: { ctx: null, ids: [], index: -1 },
+  }),
+  data: null,
+  load() {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(this.KEY)); } catch (_) { raw = null; }
+    const d = this.defaults();
+    if (raw && typeof raw === "object" && raw.v === 1) {
+      this.data = {
+        v: 1,
+        liked:        raw.liked && typeof raw.liked === "object" ? raw.liked : {},
+        likedOrder:   Array.isArray(raw.likedOrder) ? raw.likedOrder.filter(Boolean) : [],
+        playlists:    Array.isArray(raw.playlists) ? raw.playlists.filter(p => p && p.id && Array.isArray(p.tracks)) : [],
+        recent:       Array.isArray(raw.recent) ? raw.recent.filter(r => r && r.track && r.track.id) : [],
+        prefs:        Object.assign(d.prefs, raw.prefs || {}),
+        queue:        raw.queue && Array.isArray(raw.queue.ids) ? raw.queue : d.queue,
+      };
+    } else this.data = d;
+    return this.data;
+  },
+  save() {
+    try {
+      const d = this.data;
+      /* budget: keep localStorage light — cap lists */
+      if (d.recent.length > 60) d.recent.length = 60;
+      localStorage.setItem(this.KEY, JSON.stringify(d));
+    } catch (_) { /* storage full or blocked — degrade silently */ }
+  },
+};
+Store.load();
+
+/* ================================================================
+   §3 · state.js — event bus + runtime caches
+   ================================================================ */
+const Bus = new EventTarget();
+const emit = (name, detail) => Bus.dispatchEvent(new CustomEvent(name, { detail }));
+const on   = (name, fn) => Bus.addEventListener(name, (e) => fn(e.detail));
+
+const Cache = {
+  tracks: new Map(),   // id -> normalized track (runtime registry)
+  lists:  new Map(),   // ctxId -> [trackIds] (the list a row belongs to)
+  seq: 0,
+  put(t) { if (t && t.id) this.tracks.set(t.id, t); return t; },
+  list(ctx, tracks) { tracks.forEach((t) => this.put(t)); this.lists.set(ctx, tracks.filter(Boolean).map((t) => t.id)); return ctx; },
+  newCtx(prefix) { return `${prefix}-${++this.seq}`; },
+};
+
+/* normalize an Audius API track object → internal track model */
+function T(t) {
+  if (!t || !t.id) return null;
+  const a = t.artwork || {}, u = t.user || {};
+  return Cache.put({
+    src: "audius",
+    id: t.id,
+    title: t.title || "Unknown title",
+    artist: u.name || "Unknown artist",
+    artistId: u.id || null,
+    handle: u.handle || "",
+    verified: !!u.is_verified,
+    dur: +t.duration || 0,
+    genre: t.genre || "", mood: t.mood || "",
+    plays: +t.play_count || 0, likes: +t.favorite_count || 0,
+    release: (t.release_date || "").slice(0, 10),
+    art:   a["480x480"] || a["150x150"] || "",
+    artHi: a["1000x1000"] || a["480x480"] || "",
+    artSm: a["150x150"] || a["480x480"] || "",
+    itArt: null,                 // enriched later by the matcher
+    permalink: t.permalink ? "https://audius.co" + t.permalink : null,
+    streamable: t.is_streamable !== false,
+  });
+}
+const TList = (arr) => (Array.isArray(arr) ? arr.map(T).filter(Boolean) : []);
+
+/* ================================================================
+   §4 · components/toast.js + icon refresh helper
+   ================================================================ */
+function refreshIcons(root = document) {
+  try { if (window.lucide) lucide.createIcons({ root: root instanceof Element ? root : document }); } catch (_) {}
+}
+
+const Toast = {
+  show(msg, icon = "info", ms = 3200) {
+    const root = $("#toast-root");
+    const el = document.createElement("div");
+    el.className = "toast pointer-events-auto flex items-center gap-2.5 bg-[#1B2B52] border border-line rounded-xl px-4 py-3 text-sm shadow-[0_16px_50px_-12px_rgba(0,0,0,.8)]";
+    el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 text-pink shrink-0"></i><span>${esc(msg)}</span>`;
+    root.appendChild(el);
+    refreshIcons(el);
+    setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 350); }, ms);
+  },
+};
+
+/* range input fill painter (webkit needs --fill var) */
+function paintRange(input) {
+  const min = +input.min || 0, max = +input.max || 100, v = +input.value || 0;
+  input.style.setProperty("--fill", ((v - min) / (max - min)) * 100 + "%");
+}
+document.addEventListener("input", (e) => { if (e.target.matches('input[type="range"].ag')) paintRange(e.target); });
+
+/* ================================================================
+   CONFIG — public API settings
+   ----------------------------------------------------------------
+   Afterglow works out of the box with the public, read-only Audius
+   API (identified only by `app_name`, verified against the live API)
+   and the key-less iTunes Search API.
+   OPTIONAL: register a free Audius API key at https://api.audius.co/plans
+   and expose it as  window.AFTERGLOW_AUDIUS_KEY  before this script
+   runs (or paste it below) to raise rate limits. Never paste a
+   secret/Bearer token here — frontend code is public by nature.
+   ================================================================ */
+const CONFIG = {
+  appName: "AvaTune",
+  audiusAppName: "avatune",
+  audiusKey: (window.AFTERGLOW_AUDIUS_KEY || "").trim() || null,
+  audiusHosts: [
+    "https://api.audius.co",                 // primary (official gateway)
+    "https://discoveryprovider.audius.co",   // classic discovery node
+    "https://audius-discovery-1.theblueprint.xyz",
+    "https://audius-disco.derek-xu.com",
+  ],
+};
+
+/* small in-memory response cache (TTL) to avoid duplicate API calls */
+const Mem = {
+  m: new Map(),
+  get(k) { const e = this.m.get(k); if (!e) return null; if (Date.now() > e.exp) { this.m.delete(k); return null; } return e.val; },
+  set(k, val, ttl = 120000) { this.m.set(k, { val, exp: Date.now() + ttl }); return val; },
+};
+
+async function fetchJSON(url, { timeout = 15000 } = {}) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeout);
+  try {
+    const res = await fetch(url, { signal: ctl.signal });
+    if (!res.ok) { const e = new Error("HTTP " + res.status); e.status = res.status; throw e; }
+    return await res.json();
+  } finally { clearTimeout(t); }
+}
+
+/* ================================================================
+   §5 · api/audius.js — discovery, search & streaming source
+   Response envelope is always { data: … }  (verified live)
+   ================================================================ */
+const Audius = {
+  hostIdx: 0,
+  get host() { return CONFIG.audiusHosts[this.hostIdx % CONFIG.audiusHosts.length]; },
+
+  _url(path, params = {}) {
+    const u = new URL(this.host + "/v1" + path);
+    u.searchParams.set("app_name", CONFIG.audiusAppName);
+    for (const [k, v] of Object.entries(params)) {
+      if (v == null) continue;
+      if (Array.isArray(v)) v.forEach((x) => u.searchParams.append(k, x));
+      else u.searchParams.set(k, v);
+    }
+    if (CONFIG.audiusKey) u.searchParams.set("api_key", CONFIG.audiusKey);
+    return u.toString();
+  },
+
+  /* fetch with failover across discovery hosts on network failure */
+  async api(path, params = {}, attempt = 0) {
+    const ck = "au:" + path + JSON.stringify(params);
+    const hit = Mem.get(ck); if (hit) return hit;
+    try {
+      const j = await fetchJSON(this._url(path, params));
+      return Mem.set(ck, j.data);
+    } catch (err) {
+      if (attempt < CONFIG.audiusHosts.length - 1) {
+        this.hostIdx++;                        // rotate host & retry
+        return this.api(path, params, attempt + 1);
+      }
+      throw err;
+    }
+  },
+
+  async trending({ genre = null, time = "week", limit = 20, offset = 0 } = {}) {
+    const data = await this.api("/tracks/trending", { genre, time, limit, offset });
+    return TList(data).filter((t) => t.streamable);
+  },
+  async underground(limit = 12) {
+    const data = await this.api("/tracks/trending/underground", { limit, offset: 0 });
+    return TList(data).filter((t) => t.streamable);
+  },
+  async searchTracks(q, limit = 20) {
+    const data = await this.api("/tracks/search", { query: q, limit });
+    return TList(data).filter((t) => t.streamable);
+  },
+  async searchUsers(q, limit = 12) {
+    return (await this.api("/users/search", { query: q, limit })) || [];
+  },
+  async user(id)    { return this.api("/users/" + id); },
+  async userTracks(id, limit = 50) {
+    const data = await this.api("/users/" + id + "/tracks", { limit });
+    return TList(data).filter((t) => t.streamable);
+  },
+  async track(id)   { return T(await this.api("/tracks/" + id)); },
+  async tracksByIds(ids = []) {
+    if (!ids.length) return [];
+    const data = await this.api("/tracks", { id: ids });
+    return TList(data).filter((t) => t.streamable);
+  },
+  /* playlists double as albums on Audius (is_album flag) */
+  normalizePlaylist(p) {
+    if (!p) return null;
+    const a = p.artwork || {}, u = p.user || {};
+    return {
+      src: "audius-playlist",
+      id: p.id,
+      name: p.playlist_name || "Untitled",
+      desc: p.description || "",
+      isAlbum: !!p.is_album,
+      art:   a["480x480"] || a["150x150"] || "",
+      artHi: a["1000x1000"] || a["480x480"] || "",
+      owner: u.name || "Unknown", ownerId: u.id, ownerHandle: u.handle || "",
+      likes: +p.favorite_count || 0, reposts: +p.repost_count || 0,
+      totalPlays: +p.total_play_count || 0,
+      release: (p.release_date || "").slice(0, 10),
+      tracks: TList(p.tracks).filter((t) => t.streamable),
+      permalink: `https://audius.co/${u.handle || ""}/playlist/${p.slug || ""}`,
+    };
+  },
+  async playlist(id) { return this.normalizePlaylist(await this.api("/playlists/" + id)); },
+  async trendingPlaylists(type = "playlist", limit = 10) {
+    const data = await this.api("/playlists/trending", { type, limit, time: "week" });
+    return (data || []).map((p) => this.normalizePlaylist(p)).filter(Boolean);
+  },
+
+  /* official streaming mechanism: the /stream endpoint 302-redirects
+     to a signed content-node URL. HTMLAudioElement follows the redirect.
+     Never persist the signed URL — request this fresh each play. */
+  streamUrl(trackId) {
+    const u = new URL(this.host + "/v1/tracks/" + trackId + "/stream");
+    u.searchParams.set("app_name", CONFIG.audiusAppName);
+    if (CONFIG.audiusKey) u.searchParams.set("api_key", CONFIG.audiusKey);
+    return u.toString();
+  },
+};
+
+/* ================================================================
+   §6 · api/itunes.js — catalog metadata & artwork (no key needed)
+   ================================================================ */
+const ITunes = {
+  base: "https://itunes.apple.com",
+  art600(u) { return u ? u.replace(/\/\d+x\d+(bb)?\./, "/600x600bb.") : null; },
+  async search(term, entity = "song", limit = 20) {
+    const ck = `it:s:${entity}:${term}:${limit}`;
+    const hit = Mem.get(ck); if (hit) return hit;
+    const u = new URL(this.base + "/search");
+    u.searchParams.set("term", term);
+    u.searchParams.set("media", "music");
+    u.searchParams.set("entity", entity);
+    u.searchParams.set("limit", limit);
+    const j = await fetchJSON(u.toString());
+    return Mem.set(ck, j.results || [], 300000);
+  },
+  async lookup(id, entity = "song") {
+    const ck = `it:l:${id}:${entity}`;
+    const hit = Mem.get(ck); if (hit) return hit;
+    const u = new URL(this.base + "/lookup");
+    u.searchParams.set("id", id);
+    if (entity) u.searchParams.set("entity", entity);
+    const j = await fetchJSON(u.toString());
+    return Mem.set(ck, j.results || [], 600000);
+  },
+};
+
+/* ================================================================
+   §7 · api/musicMatcher.js — high-confidence Audius ⇄ iTunes match
+   ----------------------------------------------------------------
+   Normalizes punctuation/case/diacritics, scores title & artist
+   agreement, and only adopts iTunes artwork when confidence is high.
+   Never invents metadata: misses fall back to Audius artwork.
+   ================================================================ */
+const normTxt = (s) =>
+  String(s || "")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/&/g, " and ")
+    .replace(/\((feat|ft)\.[^)]*\)/gi, "")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ").trim();
+
+const Matcher = {
+  titleScore(a, b) {
+    const x = normTxt(a), y = normTxt(b);
+    if (!x || !y) return 0;
+    if (x === y) return 3;
+    if (x.includes(y) || y.includes(x)) return 1.5;
+    const ta = new Set(x.split(" ")), tb = new Set(y.split(" "));
+    const inter = [...ta].filter((w) => tb.has(w)).length;
+    const j = inter / Math.max(ta.size, tb.size);
+    return j >= 0.6 ? 1 : 0;
+  },
+  artistScore(a, b) {
+    const x = normTxt(a), y = normTxt(b);
+    if (!x || !y) return 0;
+    if (x === y) return 3;
+    if (x.includes(y) || y.includes(x)) return 2;
+    const ta = new Set(x.split(" ")), tb = new Set(y.split(" "));
+    const inter = [...ta].filter((w) => tb.has(w)).length;
+    return inter / Math.max(ta.size, tb.size) >= 0.5 ? 1 : 0;
+  },
+  score(audTrack, it) {
+    const ts = this.titleScore(audTrack.title, it.trackName);
+    const as = this.artistScore(audTrack.artist, it.artistName);
+    return { total: ts + as, ts, as };
+  },
+  confident(r) { return r.ts >= 1.5 && r.as >= 1.5 && r.total >= 3.5; },
+
+  /* enrichment queue — max 3 concurrent requests, cached per track */
+  _run: 0, _q: [], _done: new Map(),
+  enrich(track, priority = false) {
+    if (!track || track._enrichState === "ok" || track._enrichState === "none") return Promise.resolve(track);
+    if (track._enrichState === "pending") return track._enrichPromise;
+    track._enrichState = "pending";
+    track._enrichPromise = new Promise((resolve) => {
+      const job = async () => {
+        try {
+          const results = await ITunes.search(`${track.artist} ${track.title}`, "song", 6);
+          let best = null, bestR = null;
+          for (const it of results) {
+            const r = this.score(track, it);
+            if (!bestR || r.total > bestR.total) { best = it; bestR = r; }
+          }
+          if (best && this.confident(bestR)) {
+            track.itArt   = this.artSafe(best.artworkUrl100) || track.itArt;
+            track.itAlbum = best.collectionName || null;
+            track.itGenre = best.primaryGenreName || null;
+            track.itUrl   = best.trackViewUrl || null;
+            track.itCollectionId = best.collectionId || null;
+            track._enrichState = "ok";
+          } else track._enrichState = "none";
+        } catch (_) { track._enrichState = "none"; }
+        emit("enrich", track);
+        resolve(track);
+      };
+      (priority ? this._q.unshift(job) : this._q.push(job));
+      this._pump();
+    });
+    return track._enrichPromise;
+  },
+  _pump() {
+    while (this._run < 3 && this._q.length) {
+      const job = this._q.shift();
+      this._run++;
+      job().finally(() => { this._run--; this._pump(); });
+    }
+  },
+  artSafe(u) { return ITunes.art600(u); },
+  /* the artwork a card should display: verified iTunes match > Audius > fallback */
+  bestArt(track, hi = false) {
+    return track.itArt || (hi ? track.artHi : track.art) || FALLBACK_ART;
+  },
+};
+
+/* ================================================================
+   lyrics provider — lyrics.ovh public API; graceful empty state.
+   Never fabricated: only real responses are rendered.
+   ================================================================ */
+const Lyrics = {
+  async fetch(track) {
+    const artist = (track.artist || "").split(/[,&]| feat\.? | ft\.? /i)[0].trim();
+    const title  = (track.title || "").replace(/\((feat|ft)\.[^)]*\)/gi, "").trim();
+    if (!artist || !title) return null;
+    const ck = `lyr:${normTxt(artist)}|${normTxt(title)}`;
+    const hit = Mem.get(ck); if (hit !== null && hit !== undefined) return hit;
+    try {
+      const j = await fetchJSON(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`, { timeout: 9000 });
+      const text = (j.lyrics || "").trim();
+      return Mem.set(ck, text || "", 600000);
+    } catch (_) { return Mem.set(ck, "", 60000); }
+  },
+};
+
+/* ================================================================
+   §8 · audio/audioEngine.js — ONE shared Audio element app-wide
+   Events: play, pause, timeupdate, loadedmetadata, durationchange,
+   ended, waiting, playing, error  →  all sync the UI via the Bus.
+   ================================================================ */
+const audio = document.getElementById("audio");
+
+const Player = {
+  queue: [],            // [track,...]  (metadata only — no stored stream URLs)
+  index: -1,
+  ctxName: null,
+  shuffle: !!Store.data.prefs.shuffle,
+  repeat: Store.data.prefs.repeat || "off",   // off | all | one
+  history: [],          // shuffle back-stack
+  seeking: false,
+  dirty: false,         // queue restored from disk but media not loaded yet
+  _errStreak: 0,
+
+  get current() { return this.queue[this.index] || null; },
+  get playing() { return !audio.paused && !audio.ended; },
+  get hasNext() { return this.queue.length > 1; },
+
+  /* ---- queue construction ---- */
+  playFrom(ctx, trackId, { shuffle = false } = {}) {
+    const ids = Cache.lists.get(ctx) || [];
+    const tracks = ids.map((id) => Cache.tracks.get(id)).filter(Boolean);
+    if (!tracks.length) return;
+    this.queue = tracks;
+    this.ctxName = ctx;
+    this.history = [];
+    let i = tracks.findIndex((t) => t.id === trackId);
+    if (i < 0) i = 0;
+    if (shuffle) { /* start on chosen track, randomize the rest naturally */ }
+    this.index = i;
+    this._persist();
+    this.loadTrack(this.current, true);
+  },
+
+  playTracks(tracks, startIdx = 0, ctxName = null) {
+    this.queue = tracks.filter(Boolean);
+    this.ctxName = ctxName || Cache.newCtx("ad-hoc");
+    Cache.list(this.ctxName, this.queue);
+    this.index = clamp(startIdx, 0, this.queue.length - 1);
+    this.history = [];
+    this._persist();
+    this.loadTrack(this.current, true);
+  },
+
+  addToQueue(track, { next = false } = {}) {
+    if (!track) return;
+    if (!this.queue.length) { this.playTracks([track], 0); return; }
+    const at = next ? this.index + 1 : this.queue.length;
+    this.queue.splice(at, 0, track);
+    if (at <= this.index) this.index++;   // insert before current → shift
+    this._persist();
+    emit("queue");
+    Toast.show(next ? "Will play next" : "Added to queue", next ? "corner-down-right" : "list-plus");
+  },
+  removeAt(i) {
+    if (i < 0 || i >= this.queue.length) return;
+    this.queue.splice(i, 1);
+    if (i < this.index) this.index--;
+    if (this.queue.length === 0) { this.stopAll(); return; }
+    if (i === this.index) { this.index = Math.min(i, this.queue.length - 1); this.loadTrack(this.current, true); return; }
+    this._persist(); emit("queue");
+  },
+  move(i, j) {
+    if (i === j || i < 0 || j < 0 || i >= this.queue.length || j >= this.queue.length) return;
+    const [t] = this.queue.splice(i, 1);
+    this.queue.splice(j, 0, t);
+    if (this.index === i) this.index = j;
+    else if (i < this.index && j >= this.index) this.index--;
+    else if (i > this.index && j <= this.index) this.index++;
+    this._persist(); emit("queue");
+  },
+  clearQueue(keepCurrent = true) {
+    const cur = this.current;
+    this.queue = keepCurrent && cur ? [cur] : [];
+    this.index = cur && keepCurrent ? 0 : -1;
+    this.history = [];
+    this._persist(); emit("queue");
+  },
+  playAt(i) {
+    if (i < 0 || i >= this.queue.length) return;
+    if (this.shuffle && i !== this.index) this.history.push(this.index);
+    this.index = i;
+    this._persist();
+    this.loadTrack(this.current, true);
+  },
+
+  /* ---- transport ---- */
+  toggle() {
+    if (!this.current) { Toast.show("Pick a track to start listening", "disc-3"); return; }
+    if (this.dirty || !audio.getAttribute("src")) { this.loadTrack(this.current, true); return; }
+    if (audio.paused) this._play(); else audio.pause();
+  },
+  _play() {
+    const p = audio.play();
+    if (p && p.catch) p.catch((err) => {
+      if (err.name === "NotAllowedError") Toast.show("Tap play to start audio (browser autoplay policy)", "hand");
+      else Toast.show("Playback failed — try again", "triangle-alert");
+    });
+  },
+  loadTrack(track, autoplay) {
+    if (!track) return;
+    this.dirty = false;
+    this._errStreak = 0;
+    emit("loading", true);
+    emit("track", track);
+    document.body.classList.add("is-loading");
+    audio.src = Audius.streamUrl(track.id);   // fresh signed redirect each play
+    audio.load();
+    if (autoplay) this._play();
+  },
+  next(auto = false) {
+    if (!this.queue.length) return;
+    if (this.repeat === "one" && auto) { audio.currentTime = 0; this._play(); return; }
+    let ni = -1;
+    if (this.shuffle && this.queue.length > 1) {
+      this.history.push(this.index);
+      const pool = this.queue.map((_, i) => i).filter((i) => i !== this.index);
+      ni = pool[Math.floor(Math.random() * pool.length)];
+    } else ni = this.index + 1;
+    if (ni >= this.queue.length) {
+      if (this.repeat === "all" || !auto) ni = 0;
+      else { audio.currentTime = 0; return; }          // end of queue with repeat off
+    }
+    this.index = ni;
+    this._persist();
+    this.loadTrack(this.current, true);
+  },
+  prev() {
+    if (!this.queue.length) return;
+    if (audio.currentTime > 4) { audio.currentTime = 0; return; }
+    let pi;
+    if (this.shuffle && this.history.length) pi = this.history.pop();
+    else pi = this.index - 1 < 0 ? (this.repeat === "all" ? this.queue.length - 1 : 0) : this.index - 1;
+    this.index = pi;
+    this._persist();
+    this.loadTrack(this.current, true);
+  },
+  seekTo(sec) { if (isFinite(audio.duration)) audio.currentTime = clamp(sec, 0, audio.duration); },
+  stopAll() {
+    audio.pause(); audio.removeAttribute("src"); audio.load();
+    this.queue = []; this.index = -1; this.dirty = false;
+    this._persist(); emit("queue"); emit("track", null);
+  },
+
+  /* ---- modes & volume ---- */
+  setVolume(v) {
+    v = clamp(+v, 0, 1);
+    audio.volume = v;
+    if (v > 0) audio.muted = false;
+    Store.data.prefs.volume = v; Store.data.prefs.muted = audio.muted; Store.save();
+    emit("prefs");
+  },
+  toggleMute() {
+    audio.muted = !audio.muted;
+    Store.data.prefs.muted = audio.muted; Store.save();
+    emit("prefs");
+  },
+  toggleShuffle() {
+    this.shuffle = !this.shuffle;
+    this.history = [];
+    Store.data.prefs.shuffle = this.shuffle; Store.save();
+    emit("prefs");
+    Toast.show(this.shuffle ? "Shuffle on" : "Shuffle off", "shuffle", 1600);
+  },
+  cycleRepeat() {
+    this.repeat = { off: "all", all: "one", one: "off" }[this.repeat] || "off";
+    Store.data.prefs.repeat = this.repeat; Store.save();
+    emit("prefs");
+    Toast.show({ off: "Repeat off", all: "Repeat all", one: "Repeat one" }[this.repeat], this.repeat === "one" ? "repeat-1" : "repeat", 1600);
+  },
+  _persist() {
+    Store.data.queue = { ctx: this.ctxName, ids: this.queue.map((t) => t.id), index: this.index };
+    Store.save();
+    emit("queue");
+  },
+};
+
+/* ---------- audio element → state sync ---------- */
+audio.addEventListener("play",     () => { ensureAudioGraph(); resumeCtx(); startViz(); emit("playstate", true); if (Player.current) Library.pushRecent(Player.current); });
+audio.addEventListener("pause",    () => { stopViz();  emit("playstate", false); });
+audio.addEventListener("playing",  () => { document.body.classList.remove("is-loading"); emit("loading", false); Player._errStreak = 0; });
+audio.addEventListener("waiting",  () => { document.body.classList.add("is-loading");    emit("loading", true); });
+audio.addEventListener("ended",    () => Player.next(true));
+audio.addEventListener("timeupdate", () => emit("time", { cur: audio.currentTime, dur: audio.duration || Player.current?.dur || 0 }));
+audio.addEventListener("durationchange", () => emit("time", { cur: audio.currentTime, dur: audio.duration || 0 }));
+audio.addEventListener("loadedmetadata", () => emit("time", { cur: audio.currentTime, dur: audio.duration || 0 }));
+audio.addEventListener("error", () => {
+  document.body.classList.remove("is-loading"); emit("loading", false);
+  if (!Player.current || !audio.getAttribute("src")) return;
+  Player._errStreak++;
+  if (Player._errStreak <= 2 && Player.hasNext) {
+    Toast.show("This track could not be streamed — skipping", "unplug");
+    setTimeout(() => Player.next(true), 400);
+  } else {
+    Player._errStreak = 0;
+    Toast.show("Stream unavailable for this track", "cloud-off");
+  }
+});
+
+/* restore volume prefs */
+audio.volume = clamp(Store.data.prefs.volume ?? 0.8, 0, 1);
+audio.muted  = !!Store.data.prefs.muted;
+
+/* ================================================================
+   §9a · audio/visualizer.js — Web Audio analyser w/ CSS fallback
+   ================================================================ */
+let actx = null, analyser = null, vizOK = false, vizRAF = 0, vizBars = [];
+function buildVizBars() {
+  vizBars = [];
+  const el = $("#viz");
+  if (!el) return;
+  el.innerHTML = "";
+  for (let i = 0; i < 6; i++) {
+    const b = document.createElement("span");
+    b.className = "eqbar";
+    el.appendChild(b);
+    vizBars.push(b);
+  }
+}
+function ensureAudioGraph() {
+  if (actx || vizOK === "failed") return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) throw new Error("no-web-audio");
+    actx = new AC();
+    const srcNode = actx.createMediaElementSource(audio);
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 64;
+    analyser.smoothingTimeConstant = 0.82;
+    srcNode.connect(analyser);
+    analyser.connect(actx.destination);
+    vizOK = true;
+  } catch (_) { vizOK = "failed"; }
+}
+function resumeCtx() { if (actx && actx.state === "suspended") actx.resume().catch(() => {}); }
+const FAKE_OFF = () => { const v = $("#viz"); v?.classList.remove("eqfake"); v?.classList.add("eqpaused"); };
+
+/* --- Now Playing canvas visualizer: real spectrum (Web Audio) with
+       a graceful animated fallback, rounded pink-gradient bars and a
+       soft floor reflection. CPU-friendly: single rAF, DPR-capped. --- */
+let vizCanvas = null;
+function drawCanvasViz(data, now = 0, idle = false) {
+  if (!vizCanvas) vizCanvas = $("#np-viz");
+  if (!vizCanvas) return;
+  const c = vizCanvas, ctx = c.getContext("2d");
+  const w = c.clientWidth, h = c.clientHeight;
+  if (!w || !h) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
+    c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const base = h * 0.8;
+  const bw = 4, gap = 3;
+  const count = clamp(Math.floor(w / (bw + gap)), 24, 96);
+  const x0 = (w - count * (bw + gap) + gap) / 2;
+  const grad = ctx.createLinearGradient(0, 0, 0, base);
+  grad.addColorStop(0, "#FFD3E6"); grad.addColorStop(0.4, "#FF8FBE"); grad.addColorStop(1, "#FF6FAE");
+  ctx.fillStyle = grad;
+  for (let i = 0; i < count; i++) {
+    let v;
+    if (idle) v = 0.05;
+    else if (data) {
+      const idx = Math.min(data.length - 1, Math.floor(Math.pow(i / count, 1.5) * data.length * 0.85));
+      v = (data[idx] || 0) / 255;
+    } else {
+      v = clamp(0.34 + 0.26 * Math.sin(now / 430 + i * 0.5) + 0.16 * Math.sin(now / 270 + i * 1.35), 0.06, 1);
+    }
+    const bh = Math.max(2.5, v * (base - 6));
+    const x = x0 + i * (bw + gap);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, base - bh, bw, bh, 2); else ctx.rect(x, base - bh, bw, bh);
+    ctx.fill();
+    ctx.save(); ctx.globalAlpha = 0.15;   /* reflection */
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, base + 2, bw, Math.max(1.5, bh * 0.32), 2); else ctx.rect(x, base + 2, bw, bh * 0.32);
+    ctx.fill(); ctx.restore();
+  }
+  ctx.fillStyle = "rgba(170,183,208,.18)";
+  ctx.fillRect(0, base + 0.5, w, 1);
+}
+
+function startViz() {
+  const bar = $("#viz");
+  bar?.classList.remove("eqpaused");
+  cancelAnimationFrame(vizRAF);
+  const buf = analyser && vizOK === true ? new Uint8Array(analyser.frequencyBinCount) : null;
+  bar?.classList.toggle("eqfake", !buf);
+  const loop = (now) => {
+    vizRAF = requestAnimationFrame(loop);
+    if (buf) {
+      analyser.getByteFrequencyData(buf);
+      vizBars.forEach((el, i) => {
+        const v = buf[Math.floor((i * buf.length) / Math.max(1, vizBars.length))] / 255;
+        el.style.height = Math.max(10, v * 100) + "%";
+      });
+    }
+    drawCanvasViz(buf, now || 0);
+  };
+  vizRAF = requestAnimationFrame(loop);
+}
+function stopViz() {
+  cancelAnimationFrame(vizRAF);
+  vizBars.forEach((el) => (el.style.height = ""));
+  FAKE_OFF();
+  drawCanvasViz(null, 0, true);
+}
+
+/* ================================================================
+   §9b · storage operations — likes, playlists, recents
+   ================================================================ */
+const Library = {
+  isLiked: (id) => !!Store.data.liked[id],
+  toggleLike(track) {
+    if (!track) return;
+    const d = Store.data;
+    if (d.liked[track.id]) {
+      delete d.liked[track.id];
+      d.likedOrder = d.likedOrder.filter((x) => x !== track.id);
+      Toast.show("Removed from Liked Songs", "heart-off", 1800);
+    } else {
+      d.liked[track.id] = { track, at: Date.now() };
+      d.likedOrder.unshift(track.id);
+      Toast.show("Added to Liked Songs", "heart", 1800);
+    }
+    Store.save(); emit("library");
+  },
+  likedTracks() {
+    const d = Store.data;
+    return d.likedOrder.map((id) => d.liked[id] && d.liked[id].track).filter(Boolean);
+  },
+  pushRecent(track) {
+    const d = Store.data;
+    const last = d.recent[0];
+    if (last && last.track.id === track.id) return;          // no spammy duplicates
+    d.recent = d.recent.filter((r) => r.track.id !== track.id);
+    d.recent.unshift({ track, at: Date.now() });
+    if (d.recent.length > 60) d.recent.length = 60;
+    Store.save(); emit("library");
+  },
+  createPlaylist(name, tracks = []) {
+    const pl = { id: uid(), name: name || "New Playlist", createdAt: Date.now(), tracks };
+    Store.data.playlists.unshift(pl);
+    Store.save(); emit("library");
+    return pl;
+  },
+  getPlaylist: (id) => Store.data.playlists.find((p) => p.id === id),
+  renamePlaylist(id, name) {
+    const pl = this.getPlaylist(id); if (!pl) return;
+    pl.name = name || pl.name; Store.save(); emit("library");
+  },
+  deletePlaylist(id) {
+    Store.data.playlists = Store.data.playlists.filter((p) => p.id !== id);
+    Store.save(); emit("library");
+  },
+  addToPlaylist(id, track) {
+    const pl = this.getPlaylist(id); if (!pl) return;
+    if (pl.tracks.some((t) => t.id === track.id)) { Toast.show("Already in “" + pl.name + "”", "circle-check", 1800); return; }
+    pl.tracks.push(track); Store.save(); emit("library");
+    Toast.show("Added to “" + pl.name + "”", "list-plus", 1800);
+  },
+  removeFromPlaylist(id, trackId) {
+    const pl = this.getPlaylist(id); if (!pl) return;
+    pl.tracks = pl.tracks.filter((t) => t.id !== trackId);
+    Store.save(); emit("library");
+  },
+};
+
+/* ================================================================
+   §9c · components/menu.js — floating context menu
+   ================================================================ */
+const Menu = {
+  close() { $("#menu-root").innerHTML = ""; document.removeEventListener("click", Menu._outside, true); },
+  _outside(e) { if (!e.target.closest("#menu-root .menu")) Menu.close(); },
+  show(x, y, items) {
+    const root = $("#menu-root");
+    root.innerHTML = `<div class="menu fixed z-[80] min-w-[220px] rounded-xl bg-[#16224a] border border-line shadow-[0_24px_60px_-12px_rgba(0,0,0,.85)] py-1.5" role="menu">
+      ${items.map((it, i) => it.hr ? `<div class="my-1.5 h-px bg-line"></div>` : `
+        <button data-mi="${i}" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition ${it.danger ? "text-[#ff8fa3] hover:bg-[#ff8fa3]/10" : "text-white/90 hover:bg-pink/10 hover:text-white"}" role="menuitem">
+          <i data-lucide="${it.icon}" class="w-4 h-4 ${it.danger ? "" : "text-mist"}"></i>${esc(it.label)}
+        </button>`).join("")}
+    </div>`;
+    const menu = root.firstElementChild;
+    const w = 240, h = items.length * 44 + 20;
+    menu.style.left = clamp(x, 8, innerWidth - w - 8) + "px";
+    menu.style.top  = clamp(y, 8, innerHeight - h - 12) + "px";
+    refreshIcons(root);
+    root.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-mi]");
+      if (!b) return;
+      const it = items[+b.dataset.mi];
+      Menu.close();
+      it.onClick && it.onClick();
+    });
+    setTimeout(() => document.addEventListener("click", Menu._outside, true), 0);
+  },
+  forTrack(track, x, y, extra = []) {
+    if (!track) return;
+    const liked = Library.isLiked(track.id);
+    Menu.show(x, y, [
+      { icon: "play",            label: "Play now",   onClick: () => { const c = Cache.newCtx("menu"); Cache.list(c, [track]); Player.playFrom(c, track.id); } },
+      { icon: "corner-down-right", label: "Play next", onClick: () => Player.addToQueue(track, { next: true }) },
+      { icon: "list-plus",       label: "Add to queue", onClick: () => Player.addToQueue(track) },
+      { hr: true },
+      { icon: liked ? "heart-off" : "heart", label: liked ? "Remove from Liked Songs" : "Like", onClick: () => Library.toggleLike(track) },
+      { icon: "list-music",      label: "Add to playlist…", onClick: () => Modal.playlistPicker(track) },
+      ...extra,
+      { hr: true },
+      track.artistId ? { icon: "mic-vocal", label: "Go to artist", onClick: () => (location.hash = "#/artist/" + track.artistId) } : null,
+      track.permalink ? { icon: "external-link", label: "Open on Audius", onClick: () => window.open(track.permalink, "_blank", "noopener") } : null,
+    ].filter(Boolean));
+  },
+};
+
+/* ================================================================
+   §9d · components/modal.js — generic modal + playlist picker
+   ================================================================ */
+const Modal = {
+  close() { $("#modal-root").innerHTML = ""; },
+  show(innerHTML, { wide = false } = {}) {
+    const root = $("#modal-root");
+    root.innerHTML = `
+      <div class="modal-bg fixed inset-0 z-[75] bg-black/70 backdrop-blur-sm grid place-items-center p-4">
+        <div class="modal-card w-full ${wide ? "max-w-lg" : "max-w-md"} rounded-2xl bg-deep border border-line shadow-[0_40px_120px_-20px_rgba(0,0,0,.9)] p-6" role="dialog" aria-modal="true">
+          ${innerHTML}
+        </div>
+      </div>`;
+    root.querySelector(".modal-bg").addEventListener("click", (e) => { if (e.target.classList.contains("modal-bg")) Modal.close(); });
+    refreshIcons(root);
+    const inp = root.querySelector("input"); if (inp) inp.focus();
+    return root;
+  },
+  playlistPicker(track) {
+    const pls = Store.data.playlists;
+    const root = Modal.show(`
+      <h3 class="font-display font-bold text-lg">Add to playlist</h3>
+      <p class="text-sm text-mist mt-1 line-clamp-1">“${esc(track.title)}”</p>
+      <div class="mt-4 flex gap-2">
+        <input id="new-pl-name" type="text" placeholder="New playlist name…" maxlength="60"
+          class="flex-1 bg-navy/60 border border-line rounded-xl px-4 py-2.5 text-sm placeholder:text-mist/50 focus:border-pink/60" />
+        <button id="new-pl-btn" class="px-4 py-2.5 rounded-xl bg-pink text-white text-sm font-semibold hover:bg-blush hover:text-deep transition">Create</button>
+      </div>
+      <div class="mt-4 max-h-64 overflow-y-auto scroll-slim -mx-1 px-1">
+        ${pls.length ? pls.map((p) => `
+          <button class="pick-pl w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-navy/70 transition text-left" data-pl="${p.id}">
+            <span class="w-10 h-10 rounded-lg bg-navy grid place-items-center text-pink shrink-0"><i data-lucide="list-music" class="w-4 h-4"></i></span>
+            <span class="min-w-0"><span class="block text-sm font-medium line-clamp-1">${esc(p.name)}</span>
+            <span class="block text-xs text-mist">${p.tracks.length} track${p.tracks.length === 1 ? "" : "s"}</span></span>
+            <i data-lucide="plus" class="w-4 h-4 ml-auto text-mist"></i>
+          </button>`).join("")
+        : `<p class="text-sm text-mist text-center py-6">No playlists yet — create your first one above.</p>`}
+      </div>`);
+    refreshIcons(root);
+    $("#new-pl-btn").onclick = () => {
+      const name = $("#new-pl-name").value.trim();
+      const pl = Library.createPlaylist(name || "My Playlist");
+      Library.addToPlaylist(pl.id, track);
+      Modal.close();
+    };
+    $$(".pick-pl", root).forEach((b) => (b.onclick = () => { Library.addToPlaylist(b.dataset.pl, track); Modal.close(); }));
+  },
+  confirm(title, body, confirmLabel, onYes) {
+    const root = Modal.show(`
+      <h3 class="font-display font-bold text-lg">${esc(title)}</h3>
+      <p class="text-sm text-mist mt-2 leading-relaxed">${esc(body)}</p>
+      <div class="mt-6 flex justify-end gap-3">
+        <button id="cf-no" class="px-4 py-2.5 rounded-xl text-sm font-medium text-mist hover:bg-navy transition">Cancel</button>
+        <button id="cf-yes" class="px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#ff5f7e] text-white hover:brightness-110 transition">${esc(confirmLabel)}</button>
+      </div>`);
+    $("#cf-no").onclick = () => Modal.close();
+    $("#cf-yes").onclick = () => { Modal.close(); onYes(); };
+  },
+};
+
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { Menu.close(); Modal.close(); $("#np")?.classList.remove("open"); } });
+
+/* ================================================================
+   §9e · player UI bindings — desktop bar, mini player, now playing
+   ================================================================ */
+function likeBtnState(btn, liked) {
+  btn.classList.toggle("text-pink", liked);
+  btn.classList.toggle("text-mist", !liked);
+  const svgTarget = btn.querySelector("svg") || btn;
+  btn.innerHTML = `<i data-lucide="heart" class="w-[18px] h-[18px] ${liked ? "fill-current heart-pop" : ""}"></i>`;
+  refreshIcons(btn);
+}
+
+function volIcon(btn) {
+  const v = audio.muted ? 0 : audio.volume;
+  const name = v === 0 ? "volume-x" : v < 0.5 ? "volume-1" : "volume-2";
+  btn.innerHTML = `<i data-lucide="${name}" class="w-[18px] h-[18px]"></i>`;
+  refreshIcons(btn);
+}
+
+function syncTrackUI() {
+  const t = Player.current;
+  const art = t ? Matcher.bestArt(t) : FALLBACK_ART;
+  // desktop bar
+  $("#pb-art").src = art; $("#pb-art").onerror = () => imgFallback($("#pb-art"));
+  $("#pb-title").textContent = t ? t.title : "Nothing playing";
+  $("#pb-artist").textContent = t ? t.artist : "Pick something to listen to";
+  $("#pb-artist").dataset.aid = t?.artistId || "";
+  likeBtnState($("#pb-like"), t ? Library.isLiked(t.id) : false);
+  // mini
+  $("#mini").classList.toggle("hidden", !t);
+  if (t) {
+    $("#mp-art").src = Matcher.bestArt(t); $("#mp-art").onerror = () => imgFallback($("#mp-art"));
+    $("#mp-title").textContent = t.title; $("#mp-artist").textContent = t.artist;
+    likeBtnState($("#mp-like"), Library.isLiked(t.id));
+  }
+  // overlay
+  if (t) {
+    $("#np-art").src = Matcher.bestArt(t, true); $("#np-art").onerror = () => imgFallback($("#np-art"));
+    $("#np-amb").src = Matcher.bestArt(t, true); $("#np-amb").onerror = () => ($("#np-amb").style.opacity = 0);
+    if (!$("#np-amb").src || $("#np-amb").src === location.href) $("#np-amb").style.opacity = 0; else $("#np-amb").style.opacity = "";
+    $("#np-title").textContent = t.title;
+    $("#np-artist").textContent = t.artist + (t.verified ? " ✓" : "");
+    $("#np-artist").dataset.aid = t.artistId || "";
+    $("#np-meta").innerHTML = [
+      t.genre && `<span class="px-2 py-0.5 rounded-full bg-white/5 border border-line">${esc(t.genre)}</span>`,
+      t.mood && `<span class="px-2 py-0.5 rounded-full bg-white/5 border border-line">${esc(t.mood)}</span>`,
+      t.plays ? `<span class="inline-flex items-center gap-1"><i data-lucide="play" class="w-3 h-3"></i>${fmtNum(t.plays)} plays</span>` : "",
+      t.itAlbum ? `<span class="line-clamp-1">Album · ${esc(t.itAlbum)}</span>` : "",
+      t.permalink ? `<a href="${t.permalink}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 hover:text-blush transition"><i data-lucide="external-link" class="w-3 h-3"></i>Audius</a>` : "",
+    ].filter(Boolean).join("");
+    likeBtnState($("#np-like"), Library.isLiked(t.id));
+    refreshIcons($("#np-meta"));
+    document.title = "AvaTune";
+    if ("mediaSession" in navigator) {
+      try { navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist, album: t.itAlbum || "AvaTune", artwork: [{ src: Matcher.bestArt(t, true), sizes: "512x512" }] }); } catch (_) {}
+    }
+    renderNpQueue(); resetLyricsPanel();
+  } else document.title = "AvaTune";
+  // highlight playing rows anywhere
+  $$(".trow.playing").forEach((r) => r.classList.remove("playing"));
+  if (t) $$(`.trow[data-id="${CSS.escape(t.id)}"]`).forEach((r) => r.classList.add("playing"));
+}
+
+function iconInto(btn, name, cls) { if (!btn) return; btn.innerHTML = `<i data-lucide="${name}" class="${cls}"></i>`; refreshIcons(btn); }
+function syncPlaystateUI(playing) {
+  iconInto($("#pb-play"), playing ? "pause" : "play", "w-5 h-5 fill-current" + (playing ? "" : " ml-[2px]"));
+  iconInto($("#mp-play"), playing ? "pause" : "play", "w-4 h-4 fill-current" + (playing ? "" : " ml-[1px]"));
+  iconInto($("#np-play"), playing ? "pause" : "play", "w-7 h-7 fill-current" + (playing ? "" : " ml-[2px]"));
+  $("#pb-play")?.setAttribute("aria-label", playing ? "Pause" : "Play");
+  if (!playing) FAKE_OFF(); else if (vizOK !== true) startViz();
+}
+
+function syncTimeUI(cur, dur) {
+  if (!Player.seeking) {
+    const v = dur > 0 ? Math.round((cur / dur) * 1000) : 0;
+    ["#pb-seek", "#np-seek"].forEach((s) => { const el = $(s); if (el) { el.value = v; paintRange(el); } });
+    $("#mp-prog").style.width = (dur > 0 ? (cur / dur) * 100 : 0) + "%";
+  }
+  $("#pb-cur").textContent = fmtTime(cur); $("#np-cur").textContent = fmtTime(cur);
+  const d = fmtTime(dur || Player.current?.dur || 0);
+  $("#pb-dur").textContent = d; $("#np-dur").textContent = d;
+}
+
+function syncPrefsUI() {
+  const shufC = Player.shuffle ? "text-pink" : "text-mist";
+  ["#pb-shuffle", "#np-shuffle", "#mp-shuffle"].forEach((s) => { const b = $(s); if (b) { b.classList.remove("text-pink", "text-mist"); b.classList.add(shufC); } });
+  const icon = Player.repeat === "one" ? "repeat-1" : "repeat";
+  ["#pb-repeat", "#np-repeat", "#mp-repeat"].forEach((s) => {
+    const b = $(s); if (!b) return;
+    b.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i>` + (Player.repeat !== "off" ? '<span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-pink"></span>' : "");
+    b.classList.toggle("text-pink", Player.repeat !== "off");
+    b.classList.toggle("text-mist", Player.repeat === "off");
+    refreshIcons(b);
+  });
+  ["#pb-vol", "#np-vol"].forEach((s) => { const el = $(s); if (el) { el.value = audio.muted ? 0 : audio.volume; paintRange(el); } });
+  volIcon($("#pb-mute")); volIcon($("#np-mute"));
+}
+
+on("track",  () => syncTrackUI());
+on("playstate", (p) => syncPlaystateUI(p));
+on("time",   ({ cur, dur }) => syncTimeUI(cur, dur));
+on("prefs",  () => syncPrefsUI());
+on("enrich", (t) => { if (Player.current && t.id === Player.current.id && t.itArt) syncTrackUI(); });
+on("queue",  () => { renderNpQueue(); if (location.hash.startsWith("#/queue")) Router.render(); });
+
+/* ---- static control bindings ---- */
+function bindPlayerUI() {
+  buildVizBars();
+  // play/pause (all three surfaces)
+  [["#pb-play"], ["#mp-play"], ["#np-play"]].forEach(([s]) => $(s).addEventListener("click", (e) => { e.stopPropagation(); Player.toggle(); }));
+  [["#pb-next"], ["#mp-next"], ["#np-next"]].forEach(([s]) => $(s).addEventListener("click", (e) => { e.stopPropagation(); Player.next(false); }));
+  $("#mp-prev").addEventListener("click", (e) => { e.stopPropagation(); Player.prev(); });
+  $("#mp-shuffle").addEventListener("click", () => Player.toggleShuffle());
+  $("#mp-repeat").addEventListener("click", () => Player.cycleRepeat());
+  [["#pb-prev"], ["#np-prev"]].forEach(([s]) => $(s).addEventListener("click", () => Player.prev()));
+  [["#pb-shuffle"], ["#np-shuffle"]].forEach(([s]) => $(s).addEventListener("click", () => Player.toggleShuffle()));
+  [["#pb-repeat"], ["#np-repeat"]].forEach(([s]) => $(s).addEventListener("click", () => Player.cycleRepeat()));
+  // likes
+  [["#pb-like"], ["#mp-like"], ["#np-like"]].forEach(([s]) => $(s).addEventListener("click", (e) => { e.stopPropagation(); if (Player.current) Library.toggleLike(Player.current); }));
+  // seeks
+  ["#pb-seek", "#np-seek"].forEach((s) => {
+    const el = $(s);
+    el.addEventListener("pointerdown", () => (Player.seeking = true));
+    el.addEventListener("input", () => { const d = audio.duration || Player.current?.dur || 0; ($(s === "#pb-seek" ? "#pb-cur" : "#np-cur")).textContent = fmtTime((el.value / 1000) * d); });
+    el.addEventListener("change", () => {
+      const d = audio.duration || Player.current?.dur || 0;
+      Player.seekTo((el.value / 1000) * d);
+      Player.seeking = false;
+    });
+  });
+  // volumes
+  ["#pb-vol", "#np-vol"].forEach((s) => $(s).addEventListener("input", (e) => Player.setVolume(e.target.value)));
+  [["#pb-mute"], ["#np-mute"]].forEach(([s]) => $(s).addEventListener("click", () => Player.toggleMute()));
+  // overlay open/close
+  const openNp = () => { $("#np").classList.add("open"); renderNpQueue(); };
+  $("#pb-expand").addEventListener("click", openNp);
+  $("#pb-art-btn").addEventListener("click", openNp);
+  $("#mini").addEventListener("click", (e) => { if (!e.target.closest("button")) openNp(); });
+  $("#np-close").addEventListener("click", () => $("#np").classList.remove("open"));
+  $("#np-menu").addEventListener("click", (e) => { if (Player.current) Menu.forTrack(Player.current, e.clientX - 180, e.clientY - 10); });
+  $("#pb-queue").addEventListener("click", () => (location.hash = "#/queue"));
+  $("#pb-lyrics").addEventListener("click", () => { openNp(); switchNpTab("lyrics"); });
+  // overlay tabs
+  $$(".np-tab").forEach((b) => b.addEventListener("click", () => switchNpTab(b.dataset.tab)));
+  // artist links
+  $("#pb-artist").addEventListener("click", () => { const id = $("#pb-artist").dataset.aid; if (id) location.hash = "#/artist/" + id; });
+  $("#np-artist").addEventListener("click", () => { const id = $("#np-artist").dataset.aid; if (id) { $("#np").classList.remove("open"); location.hash = "#/artist/" + id; } });
+}
+
+function switchNpTab(tab) {
+  $$(".np-tab").forEach((b) => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle("bg-pink", on); b.classList.toggle("text-white", on);
+    b.classList.toggle("bg-white/5", !on); b.classList.toggle("text-mist", !on);
+  });
+  $("#np-queue-panel").classList.toggle("hidden", tab !== "queue");
+  $("#np-lyrics-panel").classList.toggle("hidden", tab !== "lyrics");
+  if (tab === "lyrics") loadLyricsPanel();
+}
+
+function renderNpQueue() {
+  const el = $("#np-queue-panel");
+  if (!el) return;
+  const q = Player.queue;
+  if (!q.length) { el.innerHTML = `<p class="text-sm text-mist py-4 text-center">Queue is empty</p>`; return; }
+  el.innerHTML = q.map((t, i) => `
+    <button class="npq w-full flex items-center gap-2.5 p-2 rounded-lg text-left transition ${i === Player.index ? "bg-pink/10" : "hover:bg-white/5"}" data-q="${i}">
+      <img src="${esc(Matcher.bestArt(t))}" onerror="imgFallback(this)" alt="" class="w-8 h-8 rounded object-cover bg-navy" loading="lazy" />
+      <span class="min-w-0 flex-1">
+        <span class="block text-xs font-medium line-clamp-1 ${i === Player.index ? "text-blush" : ""}">${esc(t.title)}</span>
+        <span class="block text-[10px] text-mist line-clamp-1">${esc(t.artist)}</span>
+      </span>
+      ${i === Player.index ? '<i data-lucide="audio-lines" class="w-3.5 h-3.5 text-pink shrink-0"></i>' : ""}
+    </button>`).join("");
+  refreshIcons(el);
+  $$(".npq", el).forEach((b) => (b.onclick = () => Player.playAt(+b.dataset.q)));
+}
+
+let lyricReq = 0;
+function resetLyricsPanel() {
+  const el = $("#np-lyrics-panel");
+  el.dataset.track = Player.current?.id || "";
+  el.innerHTML = `<div class="flex flex-col items-center gap-3 py-8 text-mist"><i data-lucide="mic-vocal" class="w-6 h-6"></i><p class="text-sm">Open the Lyrics tab to load words for this track.</p></div>`;
+  refreshIcons(el);
+}
+async function loadLyricsPanel() {
+  const t = Player.current, el = $("#np-lyrics-panel");
+  if (!t) return;
+  if (el.dataset.track === t.id && el.dataset.done === "1") return;
+  const req = ++lyricReq;
+  el.innerHTML = `<div class="space-y-2.5 py-2">${'<div class="sk h-3.5 rounded w-full"></div>'.repeat(1)}${'<div class="sk h-3.5 rounded w-11/12"></div>'.repeat(4)}${'<div class="sk h-3.5 rounded w-3/4"></div>'}</div>`;
+  const text = await Lyrics.fetch(t);
+  if (req !== lyricReq || !Player.current || Player.current.id !== t.id) return;
+  el.dataset.done = "1";
+  if (text) {
+    el.innerHTML = `<pre class="whitespace-pre-wrap font-body text-sm leading-7 text-mist">${esc(text)}</pre>
+      <p class="mt-4 text-[10px] text-mist/60 uppercase tracking-widest">Lyrics via lyrics.ovh</p>`;
+  } else {
+    el.innerHTML = `<div class="flex flex-col items-center gap-3 py-10 text-mist text-center">
+      <i data-lucide="file-x-2" class="w-7 h-7"></i>
+      <p class="text-sm font-medium text-white/80">No lyrics available</p>
+      <p class="text-xs max-w-xs">We only display lyrics from a live licensed source — none were found for this track.</p></div>`;
+    refreshIcons(el);
+  }
+}
+
+/* ---- media session + keyboard shortcuts ---- */
+function bindShortcuts() {
+  if ("mediaSession" in navigator) {
+    try {
+      navigator.mediaSession.setActionHandler("play",  () => Player.toggle());
+      navigator.mediaSession.setActionHandler("pause", () => Player.toggle());
+      navigator.mediaSession.setActionHandler("previoustrack", () => Player.prev());
+      navigator.mediaSession.setActionHandler("nexttrack",     () => Player.next(false));
+    } catch (_) {}
+  }
+  document.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (t.closest('input, textarea, select, [contenteditable="true"]')) return;   // never hijack typing
+    switch (e.code) {
+      case "Space":      e.preventDefault(); Player.toggle(); break;
+      case "ArrowLeft":  e.preventDefault(); Player.seekTo(audio.currentTime - 5); break;
+      case "ArrowRight": e.preventDefault(); Player.seekTo(audio.currentTime + 5); break;
+      case "ArrowUp":    e.preventDefault(); Player.setVolume(audio.volume + 0.05); break;
+      case "ArrowDown":  e.preventDefault(); Player.setVolume(audio.volume - 0.05); break;
+      case "KeyM":       Player.toggleMute(); break;
+      case "KeyN":       if (e.shiftKey) { Player.next(false); } break;
+    }
+  });
+}
+
+/* ================================================================
+   §10a · components/ — trackCard, trackRow, artistCard, albumCard…
+   ================================================================ */
+function normUser(u) {
+  u = u || {};
+  const p = u.profile_picture || {}, c = u.cover_photo || {};
+  return {
+    id: u.id, name: u.name || "Unknown artist", handle: u.handle || "",
+    verified: !!u.is_verified,
+    followers: +u.follower_count || 0, trackCount: +u.track_count || 0,
+    playlistCount: +u.playlist_count || 0,
+    pic:   p["480x480"] || p["150x150"] || "",
+    picHi: p["1000x1000"] || p["480x480"] || "",
+    cover: c["2000x"] || c["640x"] || "",
+    bio: u.bio || "",
+  };
+}
+
+const UI = {
+  section(title, inner, { link = null, sub = null, id = "" } = {}) {
+    return `<section ${id ? `id="${id}"` : ""} class="mt-9 first:mt-0 fade-up">
+      <div class="flex items-end justify-between mb-4 px-1">
+        <div>
+          <h2 class="font-display font-bold text-lg lg:text-xl tracking-tight">${esc(title)}</h2>
+          ${sub ? `<p class="text-xs text-mist mt-0.5">${esc(sub)}</p>` : ""}
+        </div>
+        ${link ? `<a href="${link}" class="text-xs font-semibold text-mist hover:text-pink transition shrink-0">See all</a>` : ""}
+      </div>${inner}</section>`;
+  },
+  hScroll(inner) { return `<div class="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-1 px-1 snap-x">${inner}</div>`; },
+
+  trackRow(t, i, ctx, opts = {}) {
+    const liked = Library.isLiked(t.id);
+    return `<div class="trow group grid grid-cols-[auto_minmax(0,1fr)_auto] ${opts.showGenre ? "md:grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_auto]" : ""} items-center gap-3 px-2 py-1.5 cursor-pointer" data-act="play" data-id="${t.id}" data-ctx="${ctx}" tabindex="0" role="button" aria-label="Play ${esc(t.title)} by ${esc(t.artist)}">
+      <span class="relative w-6 text-center text-sm text-mist tabular-nums">
+        <span class="group-hover:opacity-0 transition">${i + 1}</span>
+        <i data-lucide="play" class="w-3.5 h-3.5 fill-current text-white absolute inset-0 m-auto opacity-0 group-hover:opacity-100 transition pointer-events-none"></i>
+      </span>
+      <div class="flex items-center gap-3 min-w-0">
+        <img src="${esc(Matcher.bestArt(t) || FALLBACK_ART)}" onerror="imgFallback(this)" alt="" loading="lazy" class="w-10 h-10 rounded-lg object-cover bg-navy shrink-0" />
+        <div class="min-w-0">
+          <div class="trow-title text-sm font-medium line-clamp-1">${esc(t.title)}</div>
+          <div class="text-xs text-mist line-clamp-1">
+            <button class="hover:text-blush transition" data-act="artist" data-aid="${t.artistId || ""}">${esc(t.artist)}</button>${t.verified ? ' <span class="text-pink">✓</span>' : ""}
+          </div>
+        </div>
+      </div>
+      ${opts.showGenre ? `<div class="hidden md:block text-xs text-mist line-clamp-1">${esc(t.genre || "—")}</div>` : ""}
+      <div class="flex items-center gap-1 sm:gap-2">
+        ${opts.meta || ""}
+        <span class="hidden sm:block text-xs text-mist tabular-nums w-10 text-right">${fmtTime(t.dur)}</span>
+        <button class="p-1.5 rounded-full transition ${liked ? "text-pink" : "text-mist opacity-0 group-hover:opacity-100"} hover:text-pink" data-act="like" data-id="${t.id}" aria-label="Like ${esc(t.title)}">
+          <i data-lucide="heart" class="w-4 h-4 ${liked ? "fill-current" : ""}"></i>
+        </button>
+        <button class="p-1.5 rounded-full text-mist opacity-0 group-hover:opacity-100 hover:text-white transition" data-act="menu" data-id="${t.id}" aria-label="More options for ${esc(t.title)}">
+          <i data-lucide="ellipsis" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>`;
+  },
+
+  trackCard(t, ctx) {
+    return `<div class="card w-40 sm:w-44 shrink-0 rounded-2xl p-3 cursor-pointer snap-start" data-act="play" data-id="${t.id}" data-ctx="${ctx}" tabindex="0" role="button" aria-label="Play ${esc(t.title)}">
+      <div class="relative">
+        <img src="${esc(Matcher.bestArt(t) || FALLBACK_ART)}" onerror="imgFallback(this)" alt="${esc(t.title)} artwork" loading="lazy" class="w-full aspect-square rounded-xl object-cover bg-navy" />
+        <span class="hover-play absolute bottom-2 right-2 w-10 h-10 rounded-full bg-pink text-white grid place-items-center shadow-[0_8px_24px_-6px_rgba(255,111,174,.8)] hover:bg-blush hover:text-deep hover:scale-105 transition" aria-hidden="true"><i data-lucide="play" class="w-4 h-4 fill-current ml-0.5"></i></span>
+      </div>
+      <div class="mt-3 text-sm font-semibold line-clamp-1">${esc(t.title)}</div>
+      <div class="text-xs text-mist line-clamp-1 mt-0.5">${esc(t.artist)}</div>
+    </div>`;
+  },
+
+  artistCard(uRaw) {
+    const u = normUser(uRaw);
+    return `<a href="#/artist/${u.id}" class="card w-40 sm:w-44 shrink-0 rounded-2xl p-4 text-center snap-start" aria-label="Artist ${esc(u.name)}">
+      <img src="${esc(u.pic || FALLBACK_ART)}" onerror="imgFallback(this)" alt="${esc(u.name)}" loading="lazy" class="w-24 h-24 sm:w-28 sm:h-28 mx-auto rounded-full object-cover bg-navy ring-2 ring-white/5" />
+      <div class="mt-3 text-sm font-semibold line-clamp-1">${esc(u.name)} ${u.verified ? '<span class="text-pink">✓</span>' : ""}</div>
+      <div class="text-xs text-mist mt-0.5">${fmtNum(u.followers)} followers</div>
+    </a>`;
+  },
+
+  albumCard(pl) {
+    return `<a href="#/album/au:${pl.id}" class="card w-40 sm:w-44 shrink-0 rounded-2xl p-3 snap-start" aria-label="${pl.isAlbum ? "Album" : "Playlist"} ${esc(pl.name)}">
+      <img src="${esc(pl.artHi || pl.art || FALLBACK_ART)}" onerror="imgFallback(this)" alt="" loading="lazy" class="w-full aspect-square rounded-xl object-cover bg-navy" />
+      <div class="mt-3 flex items-center gap-2">
+        <span class="text-[9px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-white/5 border border-line text-mist">${pl.isAlbum ? "Album" : "Playlist"}</span>
+      </div>
+      <div class="mt-1.5 text-sm font-semibold line-clamp-1">${esc(pl.name)}</div>
+      <div class="text-xs text-mist line-clamp-1 mt-0.5">by ${esc(pl.owner)}</div>
+    </a>`;
+  },
+
+  itAlbumCard(a) {
+    const art = ITunes.art600(a.artworkUrl100) || FALLBACK_ART;
+    const year = (a.releaseDate || "").slice(0, 4);
+    return `<a href="#/album/it:${a.collectionId}" class="card w-40 sm:w-44 shrink-0 rounded-2xl p-3 snap-start" aria-label="Album ${esc(a.collectionName)}">
+      <img src="${esc(art)}" onerror="imgFallback(this)" alt="" loading="lazy" class="w-full aspect-square rounded-xl object-cover bg-navy" />
+      <div class="mt-3 text-sm font-semibold line-clamp-1">${esc(a.collectionName)}</div>
+      <div class="text-xs text-mist line-clamp-1 mt-0.5">${esc(a.artistName)}${year ? " · " + year : ""}</div>
+    </a>`;
+  },
+
+  empty(icon, title, body, cta = "") {
+    return `<div class="flex flex-col items-center text-center gap-3 py-16 px-6 text-mist fade-up">
+      <div class="w-16 h-16 rounded-2xl bg-navy/60 border border-line grid place-items-center"><i data-lucide="${icon}" class="w-7 h-7 text-pink"></i></div>
+      <h3 class="font-display font-bold text-white text-lg">${esc(title)}</h3>
+      <p class="text-sm max-w-sm leading-relaxed">${esc(body)}</p>${cta}
+    </div>`;
+  },
+  errorState(msg, retryId) {
+    return `<div class="flex flex-col items-center text-center gap-3 py-14 px-6 text-mist fade-up">
+      <div class="w-14 h-14 rounded-2xl bg-[#ff5f7e]/10 border border-[#ff5f7e]/20 grid place-items-center"><i data-lucide="cloud-off" class="w-6 h-6 text-[#ff8fa3]"></i></div>
+      <h3 class="font-display font-bold text-white">Something went wrong</h3>
+      <p class="text-sm max-w-sm">${esc(msg)}</p>
+      <button data-retry="${retryId}" class="mt-1 px-5 py-2.5 rounded-full bg-pink text-white text-sm font-semibold hover:bg-blush hover:text-deep transition">Try again</button>
+    </div>`;
+  },
+  skelCards(n = 7, circle = false) {
+    return `<div class="flex gap-4 overflow-hidden">${Array.from({ length: n }, () =>
+      `<div class="w-40 sm:w-44 shrink-0"><div class="sk w-full aspect-square ${circle ? "rounded-full" : "rounded-xl"}"></div><div class="sk h-3.5 rounded mt-3 w-4/5"></div><div class="sk h-3 rounded mt-2 w-3/5"></div></div>`).join("")}</div>`;
+  },
+  skelRows(n = 6) {
+    return `<div class="space-y-1.5">${Array.from({ length: n }, () =>
+      `<div class="flex items-center gap-3 px-2 py-1.5"><div class="sk w-6 h-3.5 rounded"></div><div class="sk w-10 h-10 rounded-lg"></div><div class="flex-1"><div class="sk h-3.5 rounded w-2/5"></div><div class="sk h-3 rounded w-1/4 mt-1.5"></div></div><div class="sk h-3.5 rounded w-10"></div></div>`).join("")}</div>`;
+  },
+  pageHead(title, sub = "") {
+    return `<div class="mb-6 fade-up"><h1 class="font-display font-extrabold text-3xl lg:text-4xl tracking-tight">${esc(title)}</h1>${sub ? `<p class="text-mist text-sm mt-1.5">${esc(sub)}</p>` : ""}</div>`;
+  },
+};
+
+/* ================================================================
+   global delegation — row/card actions (never double-bound: one
+   listener for the whole app, elements re-render freely)
+   ================================================================ */
+function backBtn() {
+  return `<button data-act="back" aria-label="Back" title="Back"
+    class="inline-flex items-center gap-1.5 pr-4 pl-2.5 py-2 rounded-full text-sm font-medium text-mist hover:text-white transition bg-white/5 border border-line hover:border-pink/50 hover:bg-pink/10 mb-5">
+    <i data-lucide="chevron-left" class="w-4 h-4"></i>Back</button>`;
+}
+
+function bindGlobalDelegation() {
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-act]");
+    if (!el) return;
+    const act = el.dataset.act;
+    if (act !== "play") e.stopPropagation();
+    switch (act) {
+      case "back": Router.back(); break;
+      case "play": {
+        const ctx = el.dataset.ctx, id = el.dataset.id;
+        if (ctx && id) Player.playFrom(ctx, id);
+        break;
+      }
+      case "play-ctx": {
+        const ctx = el.dataset.ctx;
+        const ids = Cache.lists.get(ctx) || [];
+        if (ids.length) Player.playFrom(ctx, ids[0]);
+        else Toast.show("Nothing to play yet", "circle-alert");
+        break;
+      }
+      case "shuffle-ctx": {
+        const ctx = el.dataset.ctx;
+        const ids = Cache.lists.get(ctx) || [];
+        if (ids.length) { const rand = ids[Math.floor(Math.random() * ids.length)]; Player.shuffle || Player.toggleShuffle(); Player.playFrom(ctx, rand.id || rand); }
+        break;
+      }
+      case "like": {
+        const t = Cache.tracks.get(el.dataset.id);
+        if (t) Library.toggleLike(t);
+        break;
+      }
+      case "menu": {
+        const t = Cache.tracks.get(el.dataset.id);
+        const extra = [];
+        if (el.dataset.plremove) extra.push({ icon: "trash-2", label: "Remove from this playlist", danger: true, onClick: () => { Library.removeFromPlaylist(el.dataset.plremove, el.dataset.id); } });
+        if (t) Menu.forTrack(t, e.clientX, e.clientY, extra);
+        break;
+      }
+      case "artist": {
+        const id = el.dataset.aid;
+        if (id) location.hash = "#/artist/" + id;
+        break;
+      }
+      case "genre": location.hash = "#/genre/" + encodeURIComponent(el.dataset.genre); break;
+      case "it-play": itResolveAndPlay(el.dataset.title, el.dataset.artist, el.dataset.album || "", el.dataset.art || ""); break;
+      case "quick-search": {
+        location.hash = "#/search";
+        SearchPage.setQuery(el.dataset.q);
+        break;
+      }
+    }
+  });
+  /* keyboard-accessible rows */
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.classList?.contains("trow") && !e.target.closest("button")) e.target.click();
+  });
+  /* retry buttons inside error states */
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-retry]");
+    if (b) Router.render(true);
+  });
+}
+
+/* iTunes album track → resolve a playable Audius match on demand */
+const ResolveCache = new Map();
+async function itResolveAndPlay(title, artist, album, art) {
+  const key = normTxt(title) + "|" + normTxt(artist);
+  Toast.show("Finding “" + title + "” on Audius…", "loader-circle", 1500);
+  if (ResolveCache.has(key)) {
+    const t = ResolveCache.get(key);
+    if (t) { const c = Cache.newCtx("it-album"); Cache.list(c, [t]); Player.playFrom(c, t.id); }
+    else Toast.show("Not available for streaming on Audius", "cloud-off");
+    return;
+  }
+  try {
+    const candidates = await Audius.searchTracks(artist + " " + title, 6);
+    const probe = { title, artist };
+    let best = null, bestR = null;
+    for (const c of candidates) {
+      const r = Matcher.score({ title: c.title, artist: c.artist }, { trackName: probe.title, artistName: probe.artist });
+      if (!bestR || r.total > bestR.total) { best = c; bestR = r; }
+    }
+    if (best && bestR.ts >= 1.5 && bestR.as >= 1.5) {
+      if (art) { best.itArt = art; }   // artwork came from this exact iTunes album entry
+      if (album) best.itAlbum = album;
+      ResolveCache.set(key, best);
+      const c = Cache.newCtx("it-album"); Cache.list(c, [best]);
+      Player.playFrom(c, best.id);
+    } else {
+      ResolveCache.set(key, null);
+      Toast.show("“" + title + "” isn't streamable on Audius", "cloud-off");
+    }
+  } catch (_) {
+    Toast.show("Could not reach Audius — try again", "wifi-off");
+  }
+}
+
+/* ================================================================
+   §10b · pages/home.js
+   ================================================================ */
+const HomePage = {
+  renderSeq: 0,
+  async render(view) {
+    const seq = ++this.renderSeq;
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      <div id="home-hero" class="mt-6 grid lg:grid-cols-[minmax(0,1fr)_360px] gap-5">
+        <div class="sk rounded-3xl h-[300px] lg:h-[340px]"></div>
+        <div class="hidden lg:block">${UI.skelRows(5)}</div>
+      </div>
+      <div id="home-quick" class="mt-9">${UI.skelCards(7)}</div>
+      <div id="home-trend" class="mt-2">${UI.skelCards(7)}</div>
+      <div id="home-albums" class="mt-2">${UI.skelCards(7)}</div>
+      <div id="home-for-you" class="mt-2">${UI.skelRows(5)}</div>
+    </div>`;
+    refreshIcons(view);
+
+    const [trend, albums] = await Promise.allSettled([
+      Audius.trending({ time: "week", limit: 14 }),
+      Audius.trendingPlaylists("album", 8),
+    ]);
+    if (seq !== this.renderSeq || $("#view").dataset.page !== "home") return;
+
+    if (trend.status === "rejected" && albums.status === "rejected") {
+      view.innerHTML = `<div class="px-6 py-10">${UI.errorState("Could not reach the Audius network. Check your connection and try again.", "home")}</div>`;
+      refreshIcons(view); return;
+    }
+
+    const tracks = trend.status === "fulfilled" ? trend.value : [];
+    const albs = albums.status === "fulfilled" ? albums.value : [];
+    const feat = tracks[0];
+    const ctxHero = Cache.list(Cache.newCtx("home-hero"), tracks.slice(0, 5));
+    const ctxTrend = Cache.list(Cache.newCtx("home-trend"), tracks);
+    tracks.slice(0, 6).forEach((t) => Matcher.enrich(t));   // lazy artwork upgrade for featured area
+
+    /* hero + chart sidebar */
+    $("#home-hero").innerHTML = (feat ? `
+      <div class="relative overflow-hidden rounded-3xl border border-line min-h-[300px] lg:min-h-[340px] flex items-end group cursor-pointer fade-up" data-act="play" data-id="${feat.id}" data-ctx="${ctxHero}" role="button" tabindex="0" aria-label="Play featured track ${esc(feat.title)}">
+        <img id="hero-img" src="${esc(Matcher.bestArt(feat, true) || FALLBACK_ART)}" onerror="imgFallback(this)" alt="" class="absolute inset-0 w-full h-full object-cover transition duration-700 group-hover:scale-105" />
+        <div class="absolute inset-0 bg-gradient-to-t from-[#0A1230] via-[#0A1230]/55 to-transparent"></div>
+        <div class="absolute top-5 left-5 flex items-center gap-2">
+          <span class="px-3 py-1.5 rounded-full bg-pink text-[11px] font-bold tracking-wider uppercase shadow-[0_8px_24px_-6px_rgba(255,111,174,.9)]">#1 Trending</span>
+          <span class="px-3 py-1.5 rounded-full bg-black/40 backdrop-blur text-[11px] font-semibold text-white/90">${esc(feat.genre || "Featured")}</span>
+        </div>
+        <div class="relative p-6 lg:p-8 w-full">
+          <p class="text-mist text-xs font-semibold tracking-[0.25em] uppercase mb-2">Featured this week</p>
+          <h2 class="font-display font-extrabold text-2xl lg:text-4xl tracking-tight line-clamp-2 max-w-xl">${esc(feat.title)}</h2>
+          <button class="mt-2 text-mist hover:text-blush transition text-sm lg:text-base" data-act="artist" data-aid="${feat.artistId}">${esc(feat.artist)} ${feat.verified ? '<span class="text-pink">✓</span>' : ""}</button>
+          <div class="mt-5 flex items-center gap-3">
+            <button class="hover-play px-6 py-3 rounded-full bg-pink text-white font-semibold text-sm inline-flex items-center gap-2 hover:bg-blush hover:text-deep transition shadow-[0_14px_36px_-10px_rgba(255,111,174,.8)]" data-act="play" data-id="${feat.id}" data-ctx="${ctxHero}">
+              <i data-lucide="play" class="w-4 h-4 fill-current"></i>Play now
+            </button>
+            ${feat.permalink ? `<a href="${feat.permalink}" target="_blank" rel="noopener" class="px-5 py-3 rounded-full bg-white/8 backdrop-blur border border-white/15 text-sm font-semibold hover:bg-white/15 transition inline-flex items-center gap-2" data-act="noop"><i data-lucide="external-link" class="w-4 h-4"></i>Audius</a>` : ""}
+          </div>
+        </div>
+      </div>` : "") + `
+      <div class="hidden lg:flex flex-col rounded-3xl border border-line bg-deep/60 p-4 fade-up">
+        <div class="flex items-center justify-between mb-2 px-1"><h3 class="font-display font-bold text-sm tracking-tight">On the rise</h3><i data-lucide="trending-up" class="w-4 h-4 text-pink"></i></div>
+        <div class="flex-1 overflow-y-auto scroll-slim">${tracks.slice(1, 6).map((t, i) => UI.trackRow(t, i, ctxTrend)).join("")}</div>
+      </div>`;
+
+    /* quick tiles: recent + liked + trending blend */
+    const recent = Store.data.recent.slice(0, 6).map((r) => r.track);
+    const liked = Library.likedTracks().slice(0, 4);
+    const quick = [...recent, ...liked, ...tracks.slice(4)].filter((t, i, arr) => t && arr.findIndex((x) => x.id === t.id) === i).slice(0, 8);
+    const ctxQuick = Cache.list(Cache.newCtx("home-quick"), quick);
+    $("#home-quick").outerHTML = UI.section(recent.length ? "Jump back in" : "Start exploring",
+      UI.hScroll(quick.map((t) => UI.trackCard(t, ctxQuick)).join("")),
+      { sub: recent.length ? "Your recent rotations & fresh picks" : "Fresh from the Audius charts", id: "home-quick" });
+
+    /* trending rail */
+    $("#home-trend").outerHTML = UI.section("Trending now",
+      UI.hScroll(tracks.map((t) => UI.trackCard(t, ctxTrend)).join("")),
+      { link: "#/explore", sub: "The most-played tracks on Audius this week", id: "home-trend" });
+
+    /* albums */
+    if (albs.length) {
+      $("#home-albums").outerHTML = UI.section("Albums & playlists",
+        UI.hScroll(albs.map((p) => UI.albumCard(p)).join("")),
+        { sub: "Curated sets trending on the network", id: "home-albums" });
+    } else $("#home-albums").remove();
+
+    /* personalised row from liked genres, else month chart */
+    const likedGenres = Library.likedTracks().map((t) => t.genre).filter(Boolean);
+    let forYou = null;
+    try {
+      const g = likedGenres[0];
+      forYou = g ? { title: `Because you like ${g}`, list: await Audius.trending({ genre: g, time: "month", limit: 6 }) }
+                 : { title: "All-time favourites", list: await Audius.trending({ time: "allTime", limit: 6 }) };
+    } catch (_) {}
+    const fySlot = $("#home-for-you");
+    if (seq !== this.renderSeq || !fySlot) return;
+    if (forYou && forYou.list.length) {
+      const ctx = Cache.list(Cache.newCtx("home-foryou"), forYou.list);
+      $("#home-for-you").outerHTML = UI.section(forYou.title,
+        `<div class="rounded-2xl border border-line bg-deep/50 p-2">${forYou.list.map((t, i) => UI.trackRow(t, i, ctx, { showGenre: true })).join("")}</div>`,
+        { id: "home-for-you" });
+      refreshIcons(view);
+    } else $("#home-for-you")?.remove();
+    refreshIcons(view);
+  },
+};
+
+/* ================================================================
+   §10c · pages/search.js — debounced, cancellable, with empty states
+   ================================================================ */
+const SearchPage = {
+  q: "", reqSeq: 0,
+  RECENTS_KEY: "afterglow.searches.v1",
+  getRecents() { try { const r = JSON.parse(localStorage.getItem(this.RECENTS_KEY)); return Array.isArray(r) ? r.slice(0, 6) : []; } catch (_) { return []; } },
+  pushRecent(q) {
+    const r = [q, ...this.getRecents().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 6);
+    try { localStorage.setItem(this.RECENTS_KEY, JSON.stringify(r)); } catch (_) {}
+  },
+  setQuery(q) { this.q = q; const inp = $("#search-input"); if (inp) { inp.value = q; this.run(q); } },
+
+  render(view) {
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      ${backBtn()}
+      <h1 class="font-display font-extrabold text-3xl lg:text-4xl tracking-tight fade-up">Search</h1>
+      <div class="relative mt-5 max-w-2xl fade-up">
+        <i data-lucide="search" class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-mist pointer-events-none"></i>
+        <input id="search-input" type="search" value="${esc(this.q)}" placeholder="Songs, artists, albums on Audius…" autocomplete="off" spellcheck="false"
+          class="w-full bg-deep border border-line rounded-2xl pl-12 pr-12 py-4 text-[15px] placeholder:text-mist/50 focus:border-pink/70 focus:bg-lift transition shadow-[0_12px_40px_-20px_rgba(0,0,0,.7)]" aria-label="Search music" />
+        <button id="search-clear" class="hidden absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-mist hover:text-white hover:bg-navy transition" aria-label="Clear search"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div id="search-results" class="mt-8"></div>
+    </div>`;
+    refreshIcons(view);
+    const inp = $("#search-input"), clearBtn = $("#search-clear");
+    const toggleClear = () => clearBtn.classList.toggle("hidden", !inp.value);
+    inp.addEventListener("input", debounce(() => { toggleClear(); this.run(inp.value.trim()); }, 350));
+    clearBtn.onclick = () => { inp.value = ""; toggleClear(); this.run(""); inp.focus(); };
+    toggleClear();
+    if (this.q) this.run(this.q); else this.browse($("#search-results"));
+    if (!location.hash.includes("search")) return;
+    setTimeout(() => { if (window.innerWidth > 1024) inp.focus({ preventScroll: true }); }, 60);
+  },
+
+  browse(el) {
+    const recents = this.getRecents();
+    el.innerHTML =
+      (recents.length ? UI.section("Recent searches",
+        `<div class="flex flex-wrap gap-2">${recents.map((q) => `<button data-act="quick-search" data-q="${esc(q)}" class="px-4 py-2 rounded-full bg-deep border border-line text-sm text-mist hover:text-white hover:border-pink/50 transition">${esc(q)}</button>`).join("")}</div>`) : "") +
+      UI.section("Browse genres", `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">${GENRES.map((g) => genreTile(g)).join("")}</div>`);
+    refreshIcons(el);
+  },
+
+  async run(q) {
+    this.q = q;
+    const el = $("#search-results");
+    if (!el) return;
+    if (!q) { this.browse(el); return; }
+    const seq = ++this.reqSeq;
+    el.innerHTML = `<div class="grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] gap-5"><div class="sk rounded-3xl h-64"></div>${UI.skelRows(6)}</div>
+      <div class="mt-8">${UI.skelCards(6, true)}</div>`;
+    this.pushRecent(q);
+    try {
+      const [tracks, users, itSongs, itAlbums] = await Promise.all([
+        Audius.searchTracks(q, 18),
+        Audius.searchUsers(q, 8),
+        ITunes.search(q, "song", 6).catch(() => []),
+        ITunes.search(q, "album", 8).catch(() => []),
+      ]);
+      if (seq !== this.reqSeq) return;
+      if (!tracks.length && !users.length && !itSongs.length) {
+        el.innerHTML = UI.empty("search-x", "No results for “" + q + "”", "Try a different spelling, an artist name, or browse genres below.", "");
+        refreshIcons(el); return;
+      }
+      const ctx = Cache.list(Cache.newCtx("search"), tracks);
+      tracks.slice(0, 4).forEach((t) => Matcher.enrich(t));
+      {
+        const cands = tracks.slice(0, 8);
+        let best = null, bestScore = -1;
+        for (const t of cands) {
+          const r = Matcher.score({ title: t.title, artist: t.artist }, { trackName: q, artistName: "" });
+          if (r.ts > bestScore) { bestScore = r.ts; best = t; }
+        }
+        if (best && bestScore > 0) Matcher.enrich(best, true);
+      }
+      const top = tracks[0];
+      const normUsers = users.map(normUser);
+
+      el.innerHTML = `
+        <div class="grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] gap-5">
+          ${top ? `<div class="rounded-3xl border border-line bg-deep/60 p-5 fade-up">
+            <p class="text-[10px] font-bold tracking-[0.25em] text-mist uppercase mb-4">Top result</p>
+            <img src="${esc(Matcher.bestArt(top, true) || FALLBACK_ART)}" onerror="imgFallback(this)" alt="" class="w-36 h-36 rounded-2xl object-cover shadow-2xl bg-navy" />
+            <div class="mt-4 font-display font-bold text-xl line-clamp-2">${esc(top.title)}</div>
+            <button class="text-sm text-mist hover:text-blush transition mt-0.5" data-act="artist" data-aid="${top.artistId}">${esc(top.artist)} ${top.verified ? '<span class="text-pink">✓</span>' : ""}</button>
+            <div class="mt-4 flex items-center gap-2.5">
+              <button class="px-5 py-2.5 rounded-full bg-pink text-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-blush hover:text-deep transition" data-act="play" data-id="${top.id}" data-ctx="${ctx}"><i data-lucide="play" class="w-4 h-4 fill-current"></i>Play</button>
+              <button class="p-2.5 rounded-full border border-line text-mist hover:text-pink transition" data-act="like" data-id="${top.id}" aria-label="Like"><i data-lucide="heart" class="w-4 h-4 ${Library.isLiked(top.id) ? "fill-current text-pink" : ""}"></i></button>
+              <button class="p-2.5 rounded-full border border-line text-mist hover:text-white transition" data-act="menu" data-id="${top.id}" aria-label="More"><i data-lucide="ellipsis" class="w-4 h-4"></i></button>
+            </div>
+          </div>` : ""}
+          <div class="fade-up">
+            <div class="flex items-center justify-between mb-3"><h2 class="font-display font-bold text-lg">Songs</h2>
+              <button class="text-xs font-semibold text-mist hover:text-pink transition" data-act="play-ctx" data-ctx="${ctx}">Play all</button></div>
+            <div class="rounded-2xl border border-line bg-deep/50 p-2">${tracks.slice(0, 7).map((t, i) => UI.trackRow(t, i, ctx)).join("")}</div>
+          </div>
+        </div>
+        ${normUsers.length ? UI.section("Artists", UI.hScroll(users.map((u) => UI.artistCard(u)).join(""))) : ""}
+        ${tracks.length > 7 ? UI.section("More songs", `<div class="rounded-2xl border border-line bg-deep/50 p-2">${tracks.slice(7).map((t, i) => UI.trackRow(t, i + 7, ctx)).join("")}</div>`) : ""}
+        ${itAlbums.length ? UI.section("Albums", UI.hScroll(itAlbums.map((a) => UI.itAlbumCard(a)).join("")), { sub: "Catalog metadata via iTunes · audio resolves via Audius on play" }) : ""}`;
+      refreshIcons(el);
+    } catch (err) {
+      if (seq !== this.reqSeq) return;
+      el.innerHTML = UI.errorState("Search is unavailable right now. The Audius network may be busy — please retry.", "search");
+      refreshIcons(el);
+    }
+  },
+};
+
+/* ================================================================
+   §10d · pages/explore.js — genres, underground, curated playlists
+   ================================================================ */
+const GENRES = [
+  ["Electronic", "zap", "#8b7cf6"], ["Hip-Hop/Rap", "mic-vocal", "#f9739a"],
+  ["Pop", "sparkles", "#63cdda"], ["Rock", "guitar", "#ef9d6b"],
+  ["R&B/Soul", "waves", "#d9a1ff"], ["Latin", "flame", "#ffb86b"],
+  ["Lo-Fi", "coffee", "#9bb0ff"], ["House", "home", "#ff8fb1"],
+  ["Techno", "cpu", "#7ee8c7"], ["Drum & Bass", "drum", "#f6d365"],
+  ["Trap", "boom-box", "#c39bd3"], ["Ambient", "cloud-moon", "#8fd3f4"],
+  ["Jazz", "music-2", "#f0c27b"], ["Metal", "flame", "#b0b7c3"],
+  ["Reggae", "sun", "#95e1a3"], ["Alternative", "asterisk", "#84a9ff"],
+];
+function genreTile([name, icon, color]) {
+  return `<button data-act="genre" data-genre="${esc(name)}" class="relative overflow-hidden rounded-2xl h-24 sm:h-28 text-left p-4 group transition hover:scale-[1.02] active:scale-[0.99]" style="background:linear-gradient(135deg, ${color}33, ${color}14); border:1px solid ${color}44" aria-label="Explore ${esc(name)}">
+    <span class="font-display font-bold text-[15px] sm:text-base tracking-tight">${esc(name)}</span>
+    <i data-lucide="${icon}" class="absolute -bottom-2 -right-2 w-14 h-14 opacity-25 transition group-hover:opacity-45 group-hover:rotate-6" style="color:${color}"></i>
+  </button>`;
+}
+
+const ExplorePage = {
+  seq: 0,
+  async render(view) {
+    const seq = ++this.seq;
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      ${UI.pageHead("Explore", "Genres, underground heat and curated sets from the open catalog")}
+      ${UI.section("Genres", `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">${GENRES.map((g) => genreTile(g)).join("")}</div>`)}
+      <div id="explore-under" class="mt-2">${UI.skelRows(5)}</div>
+      <div id="explore-pl" class="mt-2">${UI.skelCards(6)}</div>
+    </div>`;
+    refreshIcons(view);
+
+    const [under, pls] = await Promise.allSettled([Audius.underground(6), Audius.trendingPlaylists("playlist", 8)]);
+    if (seq !== this.seq || $("#view").dataset.page !== "explore") return;
+
+    const u = under.status === "fulfilled" ? under.value : [];
+    if (u.length) {
+      const ctx = Cache.list(Cache.newCtx("under"), u);
+      $("#explore-under").outerHTML = UI.section("Underground heat",
+        `<div class="rounded-2xl border border-line bg-deep/50 p-2">${u.map((t, i) => UI.trackRow(t, i, ctx, { showGenre: true })).join("")}</div>`,
+        { sub: "Breaking tracks bubbling up on Audius", id: "explore-under" });
+    } else $("#explore-under").remove();
+
+    const p = pls.status === "fulfilled" ? pls.value : [];
+    if (p.length) {
+      $("#explore-pl").outerHTML = UI.section("Community playlists", UI.hScroll(p.map((x) => UI.albumCard(x)).join("")), { id: "explore-pl" });
+    } else $("#explore-pl").remove();
+    refreshIcons(view);
+  },
+};
+
+/* ================================================================
+   pages/genre.js — trending within a genre, with time filters
+   ================================================================ */
+const GenrePage = {
+  time: "week", seq: 0,
+  async render(view, [genreEnc]) {
+    const genre = decodeURIComponent(genreEnc || "Electronic");
+    const seq = ++this.seq;
+    const meta = GENRES.find(([g]) => g === genre) || [genre, "music", "#FF6FAE"];
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      ${backBtn()}
+      <div class="relative overflow-hidden rounded-3xl border border-line p-6 lg:p-10 fade-up" style="background:linear-gradient(135deg, ${meta[2]}2e, #101C3C 65%)">
+        <i data-lucide="${meta[1]}" class="absolute -right-4 -bottom-6 w-44 h-44 opacity-15 pointer-events-none" style="color:${meta[2]}"></i>
+        <p class="text-[10px] font-bold tracking-[0.3em] uppercase text-mist">Genre</p>
+        <h1 class="font-display font-extrabold text-3xl lg:text-5xl tracking-tight mt-2">${esc(genre)}</h1>
+        <div class="mt-6 flex gap-2 flex-wrap" id="genre-times">
+          ${[["week", "This week"], ["month", "This month"], ["allTime", "All time"]].map(([v, l]) =>
+            `<button data-time="${v}" class="px-4 py-2 rounded-full text-xs font-semibold transition ${v === this.time ? "bg-pink text-white" : "bg-white/5 text-mist hover:text-white border border-line"}">${l}</button>`).join("")}
+        </div>
+      </div>
+      <div id="genre-list" class="mt-8">${UI.skelRows(8)}</div>
+    </div>`;
+    refreshIcons(view);
+    const load = async () => {
+      const el = $("#genre-list");
+      if (!el) return;
+      el.innerHTML = UI.skelRows(8);
+      try {
+        const tracks = await Audius.trending({ genre, time: this.time, limit: 24 });
+        if (seq !== this.seq || !document.contains(el)) return;
+        if (!tracks.length) { el.innerHTML = UI.empty("disc-3", "No trending tracks in " + genre, "The chart for this genre is quiet right now. Try another time range."); refreshIcons(el); return; }
+        const ctx = Cache.list(Cache.newCtx("genre"), tracks);
+        el.innerHTML = `
+          <div class="flex items-center justify-between mb-3 px-1">
+            <p class="text-sm text-mist">${tracks.length} tracks trending</p>
+            <button class="px-5 py-2.5 rounded-full bg-pink text-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-blush hover:text-deep transition" data-act="play-ctx" data-ctx="${ctx}"><i data-lucide="play" class="w-4 h-4 fill-current"></i>Play all</button>
+          </div>
+          <div class="rounded-2xl border border-line bg-deep/50 p-2">${tracks.map((t, i) => UI.trackRow(t, i, ctx, { showGenre: false })).join("")}</div>`;
+        refreshIcons(el);
+      } catch (_) {
+        if (seq !== this.seq) return;
+        el.innerHTML = UI.errorState("Could not load the " + genre + " chart.", "genre");
+        refreshIcons(el);
+      }
+    };
+    $$("#genre-times [data-time]", view).forEach((b) => (b.onclick = () => {
+      this.time = b.dataset.time;
+      $$("#genre-times [data-time]", view).forEach((x) => {
+        const on = x === b;
+        x.className = `px-4 py-2 rounded-full text-xs font-semibold transition ${on ? "bg-pink text-white" : "bg-white/5 text-mist hover:text-white border border-line"}`;
+      });
+      load();
+    }));
+    load();
+  },
+};
+
+/* ================================================================
+   §10e · pages/library.js, likedSongs.js, recentlyPlayed.js
+   ================================================================ */
+function mosaicCover(tracks, sizeCls = "w-12 h-12") {
+  const arts = tracks.map((t) => Matcher.bestArt(t) || FALLBACK_ART).slice(0, 4);
+  if (!arts.length) return `<span class="${sizeCls} rounded-xl bg-navy grid place-items-center text-pink shrink-0"><i data-lucide="list-music" class="w-1/2 h-1/2"></i></span>`;
+  if (arts.length === 1) return `<img src="${esc(arts[0])}" onerror="imgFallback(this)" alt="" class="${sizeCls} rounded-xl object-cover bg-navy shrink-0" />`;
+  return `<span class="${sizeCls} rounded-xl overflow-hidden grid grid-cols-2 grid-rows-2 shrink-0">${arts.map((a) => `<img src="${esc(a)}" onerror="imgFallback(this)" alt="" class="w-full h-full object-cover" loading="lazy" />`).join("")}</span>`;
+}
+
+const LibraryPage = {
+  render(view) {
+    const liked = Library.likedTracks(), pls = Store.data.playlists, recent = Store.data.recent;
+    const totalSec = liked.reduce((s, t) => s + (t.dur || 0), 0);
+    const ctxRecent = Cache.list(Cache.newCtx("lib-recent"), recent.slice(0, 5).map((r) => r.track));
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      ${UI.pageHead("Your Library", "Everything you saved lives here — stored privately in this browser")}
+
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 fade-up">
+        ${[
+          ["heart", liked.length, " liked", "#/liked"],
+          ["list-music", pls.length, " playlists", "#/library"],
+          ["history", recent.length, " recently played", "#/recent"],
+          ["list-video", Player.queue.length, " in queue", "#/queue"],
+        ].map(([icon, n, label, href]) => `<a href="${href}" class="card rounded-2xl p-4 flex items-center gap-3.5 hover:border-pink/40">
+            <span class="w-11 h-11 rounded-xl bg-navy/70 grid place-items-center text-pink shrink-0"><i data-lucide="${icon}" class="w-5 h-5"></i></span>
+            <span><span class="block font-display font-bold text-lg leading-none">${n}</span><span class="text-xs text-mist">${label}</span></span></a>`).join("")}
+      </div>
+
+      <a href="#/liked" class="mt-5 relative overflow-hidden rounded-3xl border border-line flex items-center gap-5 p-5 lg:p-7 group fade-up" style="background:linear-gradient(120deg, rgba(255,111,174,.22), rgba(16,28,60,.6) 60%)">
+        <span class="w-16 h-16 lg:w-20 lg:h-20 rounded-2xl bg-gradient-to-br from-[#FF6FAE] to-[#c2447f] grid place-items-center shadow-[0_14px_40px_-10px_rgba(255,111,174,.7)] shrink-0 group-hover:scale-105 transition"><i data-lucide="heart" class="w-8 h-8 text-white fill-current"></i></span>
+        <span class="min-w-0">
+          <span class="block font-display font-extrabold text-xl lg:text-2xl tracking-tight">Liked Songs</span>
+          <span class="block text-sm text-mist mt-1">${liked.length} track${liked.length === 1 ? "" : "s"} · ${fmtTime(totalSec)} of music</span>
+        </span>
+        <i data-lucide="chevron-right" class="w-6 h-6 ml-auto text-mist group-hover:text-pink group-hover:translate-x-1 transition shrink-0"></i>
+      </a>
+
+      ${UI.section("Playlists", `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <button id="lib-create-pl" class="rounded-2xl border-2 border-dashed border-line hover:border-pink/60 p-3 flex flex-col items-center justify-center gap-2.5 text-mist hover:text-pink transition min-h-[188px] group" aria-label="Create playlist">
+            <span class="w-12 h-12 rounded-full bg-navy/70 grid place-items-center group-hover:bg-pink group-hover:text-white transition"><i data-lucide="plus" class="w-5 h-5"></i></span>
+            <span class="text-sm font-semibold">New playlist</span>
+          </button>
+          ${pls.map((p) => `<a href="#/playlist/${p.id}" class="card rounded-2xl p-3 block">
+              ${mosaicCover(p.tracks, "w-full aspect-square")}
+              <span class="block mt-3 text-sm font-semibold line-clamp-1">${esc(p.name)}</span>
+              <span class="block text-xs text-mist mt-0.5">${p.tracks.length} track${p.tracks.length === 1 ? "" : "s"}</span></a>`).join("")}
+        </div>`)}
+
+      ${recent.length ? UI.section("Recently played", `<div class="rounded-2xl border border-line bg-deep/50 p-2">${recent.slice(0, 5).map((r, i) => UI.trackRow(r.track, i, ctxRecent, { meta: `<span class="hidden md:inline text-[11px] text-mist/70">${timeAgo(r.at)}</span>` })).join("")}</div>`, { link: "#/recent" }) : ""}
+    </div>`;
+    refreshIcons(view);
+    $("#lib-create-pl").onclick = () => createPlaylistModal();
+  },
+};
+
+const LikedPage = {
+  render(view) {
+    const liked = Library.likedTracks();
+    if (!liked.length) {
+      view.innerHTML = `<div class="px-6 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">${UI.pageHead("Liked Songs")}
+        ${UI.empty("heart", "No liked songs yet", "Tap the heart on any track and it will live here, synced across sessions on this device.", `<a href="#/home" class="mt-2 px-6 py-3 rounded-full bg-pink text-white text-sm font-semibold hover:bg-blush hover:text-deep transition inline-flex items-center gap-2"><i data-lucide="compass" class="w-4 h-4"></i>Discover music</a>`)}</div>`;
+      refreshIcons(view); return;
+    }
+    const totalSec = liked.reduce((s, t) => s + (t.dur || 0), 0);
+    const ctx = Cache.list("liked", liked);
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      <div class="relative overflow-hidden rounded-3xl border border-line p-6 lg:p-10 fade-up" style="background:linear-gradient(135deg, rgba(255,111,174,.28), #101C3C 62%)">
+        <p class="text-[10px] font-bold tracking-[0.3em] uppercase text-mist">Collection</p>
+        <h1 class="font-display font-extrabold text-3xl lg:text-5xl tracking-tight mt-2 flex items-center gap-4">Liked Songs <i data-lucide="heart" class="w-8 h-8 text-pink fill-current"></i></h1>
+        <p class="text-mist text-sm mt-2">${liked.length} tracks · ${fmtTime(totalSec)}</p>
+        <div class="mt-6 flex gap-3 flex-wrap">
+          <button class="px-6 py-3 rounded-full bg-pink text-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-blush hover:text-deep transition shadow-[0_14px_36px_-10px_rgba(255,111,174,.8)]" data-act="play-ctx" data-ctx="${ctx}"><i data-lucide="play" class="w-4 h-4 fill-current"></i>Play all</button>
+          <button class="px-6 py-3 rounded-full bg-white/8 border border-white/15 text-sm font-semibold inline-flex items-center gap-2 hover:bg-white/15 transition" data-act="shuffle-ctx" data-ctx="${ctx}"><i data-lucide="shuffle" class="w-4 h-4"></i>Shuffle</button>
+        </div>
+      </div>
+      <div class="mt-6 rounded-2xl border border-line bg-deep/50 p-2 fade-up">
+        ${liked.map((t, i) => UI.trackRow(t, i, ctx, { meta: `<span class="hidden md:inline text-[11px] text-mist/70">${timeAgo(Store.data.liked[t.id]?.at || 0)}</span>` })).join("")}
+      </div>
+    </div>`;
+    refreshIcons(view);
+  },
+};
+
+const RecentPage = {
+  render(view) {
+    const recent = Store.data.recent;
+    if (!recent.length) {
+      view.innerHTML = `<div class="px-6 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">${UI.pageHead("Recently Played")}
+        ${UI.empty("history", "Nothing played yet", "Your listening history will appear here as you play tracks.")}</div>`;
+      refreshIcons(view); return;
+    }
+    const tracks = recent.map((r) => r.track);
+    const ctx = Cache.list("recent", tracks);
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      <div class="flex items-end justify-between mb-6">
+        <div><h1 class="font-display font-extrabold text-3xl lg:text-4xl tracking-tight">Recently Played<span class="text-pink">.</span></h1>
+        <p class="text-mist text-sm mt-1.5">Your last ${recent.length} listens, newest first</p></div>
+        <button id="clear-recent" class="px-4 py-2.5 rounded-full border border-line text-xs font-semibold text-mist hover:text-white hover:border-[#ff5f7e]/60 hover:text-[#ff8fa3] transition inline-flex items-center gap-2"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Clear history</button>
+      </div>
+      <div class="rounded-2xl border border-line bg-deep/50 p-2 fade-up">
+        ${recent.map((r, i) => UI.trackRow(r.track, i, ctx, { meta: `<span class="hidden md:inline text-[11px] text-mist/70 w-16 text-right">${timeAgo(r.at)}</span>` })).join("")}
+      </div>
+    </div>`;
+    refreshIcons(view);
+    $("#clear-recent").onclick = () => Modal.confirm("Clear listening history?", "This removes your Recently Played list. It cannot be undone.", "Clear", () => { Store.data.recent = []; Store.save(); emit("library"); Router.render(true); });
+  },
+};
+
+/* ================================================================
+   §10f · pages/queue.js — view, reorder, save
+   ================================================================ */
+const QueuePage = {
+  render(view) {
+    const q = Player.queue, cur = Player.index;
+    if (!q.length) {
+      view.innerHTML = `<div class="px-6 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">${UI.pageHead("Queue")}
+        ${UI.empty("list-music", "Your queue is empty", "Play anything and the upcoming tracks will line up here. Use “Play next” or “Add to queue” from any track menu.", `<a href="#/home" class="mt-2 px-6 py-3 rounded-full bg-pink text-white text-sm font-semibold hover:bg-blush hover:text-deep transition">Browse trending</a>`)}</div>`;
+      refreshIcons(view); return;
+    }
+    const ctx = Cache.list("queue-page", q);
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1200px] mx-auto">
+      <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
+        <div><h1 class="font-display font-extrabold text-3xl lg:text-4xl tracking-tight">Queue<span class="text-pink">.</span></h1>
+        <p class="text-mist text-sm mt-1.5">${q.length} tracks · ${Player.shuffle ? "Shuffle on" : "In order"}</p></div>
+        <div class="flex gap-2">
+          <button id="q-save" class="px-4 py-2.5 rounded-full border border-line text-xs font-semibold text-mist hover:text-white hover:border-pink/60 transition inline-flex items-center gap-2"><i data-lucide="list-plus" class="w-3.5 h-3.5"></i>Save as playlist</button>
+          <button id="q-clear" class="px-4 py-2.5 rounded-full border border-line text-xs font-semibold text-mist hover:text-[#ff8fa3] hover:border-[#ff5f7e]/60 transition inline-flex items-center gap-2"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Clear</button>
+        </div>
+      </div>
+      <p class="text-[10px] font-bold tracking-[0.25em] uppercase text-mist mb-2 px-1">Now playing</p>
+      <div class="rounded-2xl border border-pink/25 bg-pink/5 p-2 mb-6">${cur >= 0 && q[cur] ? UI.trackRow(q[cur], cur, ctx) : ""}</div>
+      <p class="text-[10px] font-bold tracking-[0.25em] uppercase text-mist mb-2 px-1">Up next — drag or use arrows to reorder</p>
+      <div id="q-list" class="space-y-1">
+        ${q.map((t, i) => i === cur ? "" : `
+          <div class="qrow flex items-center gap-2 rounded-xl bg-deep/50 border border-line p-1.5" draggable="true" data-i="${i}">
+            <i data-lucide="grip-vertical" class="w-4 h-4 text-mist/50 shrink-0 ml-1 cursor-grab"></i>
+            <div class="flex-1 min-w-0">${UI.trackRow(t, i, ctx)}</div>
+            <button class="q-up p-2 rounded-lg text-mist hover:text-white hover:bg-navy transition" aria-label="Move up"><i data-lucide="arrow-up" class="w-4 h-4"></i></button>
+            <button class="q-down p-2 rounded-lg text-mist hover:text-white hover:bg-navy transition" aria-label="Move down"><i data-lucide="arrow-down" class="w-4 h-4"></i></button>
+            <button class="q-del p-2 rounded-lg text-mist hover:text-[#ff8fa3] hover:bg-navy transition" aria-label="Remove from queue"><i data-lucide="x" class="w-4 h-4"></i></button>
+          </div>`).join("")}
+      </div>
+    </div>`;
+    refreshIcons(view);
+    $("#q-clear").onclick = () => { Player.clearQueue(false); Router.render(true); };
+    $("#q-save").onclick = () => {
+      const pl = Library.createPlaylist("Queue · " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }), [...q]);
+      Toast.show("Saved as “" + pl.name + "”", "list-plus");
+    };
+    let dragI = null;
+    $$("#q-list .qrow").forEach((row) => {
+      const i = +row.dataset.i;
+      row.querySelector(".q-up").onclick = () => Player.move(i, i - 1);
+      row.querySelector(".q-down").onclick = () => Player.move(i, i + 1);
+      row.querySelector(".q-del").onclick = () => Player.removeAt(i);
+      row.addEventListener("dragstart", () => (dragI = i));
+      row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("drag-over"); });
+      row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+      row.addEventListener("drop", (e) => { e.preventDefault(); row.classList.remove("drag-over"); if (dragI != null) Player.move(dragI, i); });
+    });
+  },
+};
+
+/* ================================================================
+   §10g · pages/playlist.js — user playlist detail (CRUD)
+   ================================================================ */
+const PlaylistPage = {
+  render(view, id) {
+    const pl = Library.getPlaylist(id);
+    if (!pl) {
+      view.innerHTML = `<div class="px-6 py-6 pb-36 lg:pb-32">${UI.empty("list-x", "Playlist not found", "It may have been deleted.", `<a href="#/library" class="mt-2 px-6 py-3 rounded-full bg-pink text-white text-sm font-semibold">Back to library</a>`)}</div>`;
+      refreshIcons(view); return;
+    }
+    const totalSec = pl.tracks.reduce((s, t) => s + (t.dur || 0), 0);
+    const ctx = Cache.list("upl-" + pl.id, pl.tracks);
+    pl.tracks.forEach((t) => Cache.put(t));
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      ${backBtn()}
+      <div class="relative overflow-hidden rounded-3xl border border-line p-6 lg:p-10 fade-up bg-gradient-to-br from-navy/70 to-deep flex flex-col sm:flex-row gap-6 sm:items-end">
+        ${mosaicCover(pl.tracks, "w-32 h-32 lg:w-40 lg:h-40 shadow-2xl")}
+        <div class="min-w-0">
+          <p class="text-[10px] font-bold tracking-[0.3em] uppercase text-mist">Playlist</p>
+          <h1 class="font-display font-extrabold text-2xl lg:text-4xl tracking-tight mt-2 line-clamp-2">${esc(pl.name)}</h1>
+          <p class="text-mist text-sm mt-2">${pl.tracks.length} tracks · ${fmtTime(totalSec)} · created ${timeAgo(pl.createdAt)}</p>
+          <div class="mt-5 flex gap-2.5 flex-wrap">
+            ${pl.tracks.length ? `<button class="px-6 py-3 rounded-full bg-pink text-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-blush hover:text-deep transition shadow-[0_14px_36px_-10px_rgba(255,111,174,.8)]" data-act="play-ctx" data-ctx="${ctx}"><i data-lucide="play" class="w-4 h-4 fill-current"></i>Play</button>` : ""}
+            <button id="pl-rename" class="px-5 py-3 rounded-full bg-white/8 border border-white/15 text-sm font-semibold inline-flex items-center gap-2 hover:bg-white/15 transition"><i data-lucide="pencil" class="w-4 h-4"></i>Rename</button>
+            <button id="pl-delete" class="px-5 py-3 rounded-full bg-white/8 border border-white/15 text-sm font-semibold inline-flex items-center gap-2 text-[#ff8fa3] hover:bg-[#ff5f7e]/15 transition"><i data-lucide="trash-2" class="w-4 h-4"></i>Delete</button>
+          </div>
+        </div>
+      </div>
+      <div class="mt-6">
+        ${pl.tracks.length
+          ? `<div class="rounded-2xl border border-line bg-deep/50 p-2 fade-up">${pl.tracks.map((t, i) => UI.trackRow(t, i, ctx).replace('data-act="menu"', `data-act="menu" data-plremove="${pl.id}"`)).join("")}</div>
+             <p class="text-xs text-mist/70 mt-3 px-1">Tip: use the track menu to add more songs, or remove them from this playlist.</p>`
+          : UI.empty("music", "This playlist is empty", "Open any track's menu (⋯) and choose “Add to playlist” to fill it up.", `<a href="#/home" class="mt-2 px-6 py-3 rounded-full bg-pink text-white text-sm font-semibold">Browse music</a>`)}
+      </div>
+    </div>`;
+    refreshIcons(view);
+    $("#pl-rename").onclick = () => {
+      const root = Modal.show(`
+        <h3 class="font-display font-bold text-lg">Rename playlist</h3>
+        <input id="rename-inp" type="text" value="${esc(pl.name)}" maxlength="60" class="mt-4 w-full bg-navy/60 border border-line rounded-xl px-4 py-3 text-sm focus:border-pink/60" />
+        <div class="mt-5 flex justify-end gap-3">
+          <button id="rn-no" class="px-4 py-2.5 rounded-xl text-sm text-mist hover:bg-navy transition">Cancel</button>
+          <button id="rn-yes" class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-pink text-white hover:bg-blush hover:text-deep transition">Save</button>
+        </div>`);
+      $("#rn-no").onclick = () => Modal.close();
+      $("#rn-yes").onclick = () => { Library.renamePlaylist(pl.id, $("#rename-inp").value.trim()); Modal.close(); Toast.show("Playlist renamed", "pencil", 1600); };
+      $("#rename-inp").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#rn-yes").click(); });
+    };
+    $("#pl-delete").onclick = () => Modal.confirm("Delete “" + pl.name + "”?", "The playlist and its track list will be removed from this device.", "Delete", () => { Library.deletePlaylist(pl.id); location.hash = "#/library"; Toast.show("Playlist deleted", "trash-2", 1800); });
+  },
+};
+
+/* ================================================================
+   §10h · pages/album.js — Audius playlists/albums + iTunes albums
+   ================================================================ */
+const AlbumPage = {
+  seq: 0,
+  async render(view, param) {
+    const seq = ++this.seq;
+    const [src, id] = (param || "").includes(":") ? param.split(/:(.+)/) : ["au", param];
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      <div class="sk rounded-3xl h-56 lg:h-64"></div><div class="mt-6">${UI.skelRows(8)}</div></div>`;
+    refreshIcons(view);
+    try {
+      if (src === "au") {
+        const pl = await Audius.playlist(id);
+        if (seq !== this.seq || !pl || $("#view").dataset.page !== "album") return;
+        pl.tracks.forEach((t) => Cache.put(t));
+        const ctx = Cache.list(Cache.newCtx("album-au"), pl.tracks);
+        const totalSec = pl.tracks.reduce((s, t) => s + (t.dur || 0), 0);
+        view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+          ${backBtn()}
+          <div class="relative overflow-hidden rounded-3xl border border-line p-6 lg:p-10 fade-up bg-gradient-to-br from-navy/80 to-deep flex flex-col sm:flex-row gap-6 sm:items-end">
+            <img src="${esc(pl.artHi || pl.art || FALLBACK_ART)}" onerror="imgFallback(this)" alt="${esc(pl.name)} artwork" class="w-36 h-36 lg:w-44 lg:h-44 rounded-2xl object-cover shadow-2xl bg-deep shrink-0" />
+            <div class="min-w-0">
+              <p class="text-[10px] font-bold tracking-[0.3em] uppercase text-pink">${pl.isAlbum ? "Album" : "Playlist"}</p>
+              <h1 class="font-display font-extrabold text-2xl lg:text-4xl tracking-tight mt-2 line-clamp-2">${esc(pl.name)}</h1>
+              <button class="text-sm text-mist hover:text-blush transition mt-1.5" data-act="artist" data-aid="${pl.ownerId}">by ${esc(pl.owner)}</button>
+              <p class="text-xs text-mist/80 mt-2">${pl.tracks.length} tracks · ${fmtTime(totalSec)}${pl.release ? " · " + pl.release.slice(0, 4) : ""}${pl.likes ? " · " + fmtNum(pl.likes) + " likes" : ""}</p>
+              <div class="mt-5 flex gap-2.5 flex-wrap">
+                ${pl.tracks.length ? `<button class="px-6 py-3 rounded-full bg-pink text-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-blush hover:text-deep transition shadow-[0_14px_36px_-10px_rgba(255,111,174,.8)]" data-act="play-ctx" data-ctx="${ctx}"><i data-lucide="play" class="w-4 h-4 fill-current"></i>Play</button>` : ""}
+                ${pl.permalink ? `<a href="${pl.permalink}" target="_blank" rel="noopener" class="px-5 py-3 rounded-full bg-white/8 border border-white/15 text-sm font-semibold inline-flex items-center gap-2 hover:bg-white/15 transition"><i data-lucide="external-link" class="w-4 h-4"></i>Audius</a>` : ""}
+              </div>
+            </div>
+          </div>
+          ${pl.desc ? `<p class="mt-5 text-sm text-mist leading-relaxed max-w-3xl line-clamp-3">${esc(pl.desc)}</p>` : ""}
+          <div class="mt-6 rounded-2xl border border-line bg-deep/50 p-2 fade-up">
+            ${pl.tracks.length ? pl.tracks.map((t, i) => UI.trackRow(t, i, ctx, { showGenre: true })).join("") : UI.empty("music", "No streamable tracks", "This collection has no playable entries right now.")}
+          </div>
+        </div>`;
+      } else {
+        /* iTunes album: metadata & artwork from Apple; audio resolves via Audius */
+        const results = await ITunes.lookup(id, "song");
+        if (seq !== this.seq || $("#view").dataset.page !== "album") return;
+        const col = results.find((r) => r.wrapperType === "collection");
+        const songs = results.filter((r) => r.wrapperType === "track");
+        if (!col) throw new Error("not-found");
+        const art = ITunes.art600(col.artworkUrl100) || FALLBACK_ART;
+        const year = (col.releaseDate || "").slice(0, 4);
+        view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+          ${backBtn()}
+          <div class="relative overflow-hidden rounded-3xl border border-line p-6 lg:p-10 fade-up bg-gradient-to-br from-navy/80 to-deep flex flex-col sm:flex-row gap-6 sm:items-end">
+            <img src="${esc(art)}" onerror="imgFallback(this)" alt="${esc(col.collectionName)} artwork" class="w-36 h-36 lg:w-44 lg:h-44 rounded-2xl object-cover shadow-2xl bg-deep shrink-0" />
+            <div class="min-w-0">
+              <p class="text-[10px] font-bold tracking-[0.3em] uppercase text-pink">Album · Apple catalog</p>
+              <h1 class="font-display font-extrabold text-2xl lg:text-4xl tracking-tight mt-2 line-clamp-2">${esc(col.collectionName)}</h1>
+              <button class="text-sm text-mist hover:text-blush transition mt-1.5" data-act="quick-search" data-q="${esc(col.artistName)}">${esc(col.artistName)}</button>
+              <p class="text-xs text-mist/80 mt-2">${year ? year + " · " : ""}${esc(col.primaryGenreName || "")} · ${col.trackCount || songs.length} tracks</p>
+              <p class="text-[11px] text-mist/60 mt-3 max-w-lg leading-relaxed">Metadata & artwork © Apple, via the iTunes Search API. Tapping a track resolves a streamable match on Audius in real time — tracks unavailable there are left unplayed rather than faked.</p>
+              ${col.collectionViewUrl ? `<a href="${col.collectionViewUrl}" target="_blank" rel="noopener" class="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/8 border border-white/15 text-xs font-semibold hover:bg-white/15 transition"><i data-lucide="external-link" class="w-3.5 h-3.5"></i>View on Apple Music</a>` : ""}
+            </div>
+          </div>
+          <div class="mt-6 rounded-2xl border border-line bg-deep/50 p-2 fade-up">
+            ${songs.map((s, i) => `
+              <div class="trow group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-2 py-1.5 cursor-pointer" data-act="it-play" data-title="${esc(s.trackName)}" data-artist="${esc(s.artistName || col.artistName)}" data-album="${esc(col.collectionName)}" data-art="${esc(art)}" tabindex="0" role="button" aria-label="Play ${esc(s.trackName)}">
+                <span class="relative w-6 text-center text-sm text-mist tabular-nums">
+                  <span class="group-hover:opacity-0 transition">${s.trackNumber || i + 1}</span>
+                  <i data-lucide="play" class="w-3.5 h-3.5 fill-current text-white absolute inset-0 m-auto opacity-0 group-hover:opacity-100 transition pointer-events-none"></i>
+                </span>
+                <div class="min-w-0">
+                  <div class="text-sm font-medium line-clamp-1">${esc(s.trackName)}${s.trackExplicitness === "explicit" ? ' <span class="text-[9px] align-middle px-1 rounded bg-white/10 text-mist">E</span>' : ""}</div>
+                  <div class="text-xs text-mist line-clamp-1">${esc(s.artistName || col.artistName)}</div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-mist tabular-nums">${fmtTime((s.trackTimeMillis || 0) / 1000)}</span>
+                  <i data-lucide="audio-lines" class="w-4 h-4 text-mist/40"></i>
+                </div>
+              </div>`).join("")}
+          </div>
+        </div>`;
+      }
+      refreshIcons(view);
+    } catch (_) {
+      if (seq !== this.seq) return;
+      view.innerHTML = `<div class="px-6 py-10">${UI.errorState("This collection could not be loaded.", "album")}</div>`;
+      refreshIcons(view);
+    }
+  },
+};
+
+/* ================================================================
+   §10i · pages/artist.js — Audius artist profile + tracks
+   ================================================================ */
+const ArtistPage = {
+  seq: 0,
+  async render(view, id) {
+    const seq = ++this.seq;
+    view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+      <div class="sk rounded-3xl h-64 lg:h-72"></div><div class="mt-6">${UI.skelRows(8)}</div></div>`;
+    refreshIcons(view);
+    try {
+      const [uRaw, tracks] = await Promise.all([Audius.user(id), Audius.userTracks(id, 50)]);
+      if (seq !== this.seq || $("#view").dataset.page !== "artist") return;
+      const u = normUser(uRaw);
+      tracks.sort((a, b) => b.plays - a.plays);          // “popular” sort client-side (API rejects sort param)
+      const ctx = Cache.list(Cache.newCtx("artist"), tracks);
+      tracks.slice(0, 3).forEach((t) => Matcher.enrich(t));
+      view.innerHTML = `<div class="px-4 sm:px-6 lg:px-8 py-6 pb-36 lg:pb-32 max-w-[1400px] mx-auto">
+        ${backBtn()}
+        <div class="relative overflow-hidden rounded-3xl border border-line min-h-[260px] lg:min-h-[300px] flex items-end fade-up">
+          ${u.cover ? `<img src="${esc(u.cover)}" onerror="this.remove()" alt="" class="absolute inset-0 w-full h-full object-cover" />` : ""}
+          <div class="absolute inset-0 bg-gradient-to-t from-[#0A1230] via-[#0A1230]/60 to-[#0A1230]/10"></div>
+          <div class="relative p-6 lg:p-10 flex flex-col sm:flex-row sm:items-end gap-5 w-full">
+            <img src="${esc(u.picHi || u.pic || FALLBACK_ART)}" onerror="imgFallback(this)" alt="${esc(u.name)}" class="w-28 h-28 lg:w-36 lg:h-36 rounded-full object-cover ring-4 ring-[#0A1230] shadow-2xl bg-navy shrink-0" />
+            <div class="min-w-0">
+              <h1 class="font-display font-extrabold text-2xl lg:text-4xl tracking-tight flex items-center gap-2.5">${esc(u.name)} ${u.verified ? '<i data-lucide="badge-check" class="w-6 h-6 text-pink shrink-0"></i>' : ""}</h1>
+              <p class="text-mist text-sm mt-1.5">@${esc(u.handle)} · ${fmtNum(u.followers)} followers · ${u.trackCount} tracks</p>
+              <div class="mt-4 flex gap-2.5 flex-wrap">
+                ${tracks.length ? `<button class="px-6 py-3 rounded-full bg-pink text-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-blush hover:text-deep transition shadow-[0_14px_36px_-10px_rgba(255,111,174,.8)]" data-act="play-ctx" data-ctx="${ctx}"><i data-lucide="play" class="w-4 h-4 fill-current"></i>Play</button>
+                <button class="px-5 py-3 rounded-full bg-white/8 backdrop-blur border border-white/15 text-sm font-semibold inline-flex items-center gap-2 hover:bg-white/15 transition" data-act="shuffle-ctx" data-ctx="${ctx}"><i data-lucide="shuffle" class="w-4 h-4"></i>Shuffle</button>` : ""}
+                <a href="https://audius.co/${esc(u.handle)}" target="_blank" rel="noopener" class="px-5 py-3 rounded-full bg-white/8 backdrop-blur border border-white/15 text-sm font-semibold inline-flex items-center gap-2 hover:bg-white/15 transition"><i data-lucide="external-link" class="w-4 h-4"></i>Audius profile</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${u.bio ? `<p class="mt-5 text-sm text-mist leading-relaxed max-w-3xl line-clamp-3">${esc(u.bio)}</p>` : ""}
+        <div class="mt-8">
+          <h2 class="font-display font-bold text-lg mb-3">Popular tracks</h2>
+          ${tracks.length
+            ? `<div class="rounded-2xl border border-line bg-deep/50 p-2 fade-up">${tracks.map((t, i) => UI.trackRow(t, i, ctx, { showGenre: true })).join("")}</div>`
+            : UI.empty("music", "No tracks yet", "This artist hasn't published streamable tracks.")}
+        </div>
+      </div>`;
+      refreshIcons(view);
+    } catch (_) {
+      if (seq !== this.seq) return;
+      view.innerHTML = `<div class="px-6 py-10">${UI.errorState("Artist profile could not be loaded.", "artist")}</div>`;
+      refreshIcons(view);
+    }
+  },
+};
+
+/* ================================================================
+   §11 · router.js — hash router; audio keeps playing between pages
+   ================================================================ */
+const Router = {
+  lastHash: null,
+  stack: [],          // in-app back history (previous hashes)
+  _back: false,       // true when the next render is a back-navigation
+  canBack() { return this.stack.length > 0; },
+  back() {
+    const prev = this.stack.pop() || "#/home";
+    this._back = true;
+    location.hash = prev;
+  },
+  parseHash() {
+    const raw = location.hash.replace(/^#\/?/, "") || "home";
+    return raw.split("/").filter(Boolean);
+  },
+  setNav(key) {
+    const map = { genre: "explore", artist: "", album: "", playlist: "library" };
+    const k = key in map ? map[key] : key;
+    $$(".navlink").forEach((a) => a.classList.toggle("active", a.dataset.nav === k && k !== ""));
+    $$(".mnav").forEach((a) => { const on = a.dataset.nav === k; a.classList.toggle("text-pink", on); a.classList.toggle("text-mist", !on); });
+  },
+  async render(keepScroll) {
+    const hash = location.hash || "#/home";
+    if (keepScroll === undefined) keepScroll = hash === this.lastHash;
+    if (this._back) this._back = false;                                  // came back via back() — don't re-push
+    else if (this.lastHash && this.lastHash !== hash) {
+      this.stack.push(this.lastHash);
+      if (this.stack.length > 50) this.stack.shift();
+    }
+    this.lastHash = hash;
+    const seg = this.parseHash();
+    const page = seg[0] || "home";
+    this.setNav(page);
+    Menu.close();
+    const view = $("#view");
+    view.dataset.page = page;
+    const st = view.scrollTop;
+    try {
+      switch (page) {
+        case "home":    await HomePage.render(view); break;
+        case "search":  await SearchPage.render(view); break;
+        case "explore": await ExplorePage.render(view); break;
+        case "genre":   await GenrePage.render(view, seg.slice(1)); break;
+        case "library": LibraryPage.render(view); break;
+        case "liked":   LikedPage.render(view); break;
+        case "recent":  RecentPage.render(view); break;
+        case "queue":   QueuePage.render(view); break;
+        case "playlist":PlaylistPage.render(view, seg[1]); break;
+        case "album":   await AlbumPage.render(view, seg[1]); break;
+        case "artist":  await ArtistPage.render(view, seg[1]); break;
+        default:        await HomePage.render(view);
+      }
+    } catch (err) {
+      view.innerHTML = `<div class="px-6 py-10">${UI.errorState("This page could not be rendered.", "page")}</div>`;
+    }
+    renderDevFooter(view);
+    refreshIcons(view);
+    view.scrollTop = keepScroll ? st : 0;
+  },
+};
+window.addEventListener("hashchange", () => { $("#np")?.classList.remove("open"); Router.render(); });
+
+/* ================================================================
+   sidebar playlists (live-updates with the library)
+   ================================================================ */
+function renderSidebarPlaylists() {
+  const el = $("#sb-playlists");
+  if (!el) return;
+  const pls = Store.data.playlists;
+  el.innerHTML = pls.length
+    ? pls.map((p) => `<a href="#/playlist/${p.id}" class="navlink flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-mist">
+        ${mosaicCover(p.tracks, "w-8 h-8 rounded-lg")}
+        <span class="min-w-0 flex-1"><span class="block text-[13px] font-medium line-clamp-1">${esc(p.name)}</span>
+        <span class="block text-[10px] text-mist/60">${p.tracks.length} tracks</span></span></a>`).join("")
+    : `<p class="px-3 py-2 text-xs text-mist/60 leading-relaxed">No playlists yet.<br/>Tap <span class="text-pink font-bold">+</span> to create one.</p>`;
+  refreshIcons(el);
+}
+
+function createPlaylistModal() {
+  const root = Modal.show(`
+    <h3 class="font-display font-bold text-lg">Create playlist</h3>
+    <p class="text-sm text-mist mt-1">Give your new mix a name.</p>
+    <input id="cp-inp" type="text" placeholder="e.g. Late Night Drive" maxlength="60" class="mt-4 w-full bg-navy/60 border border-line rounded-xl px-4 py-3 text-sm placeholder:text-mist/50 focus:border-pink/60" />
+    <div class="mt-5 flex justify-end gap-3">
+      <button id="cp-no" class="px-4 py-2.5 rounded-xl text-sm text-mist hover:bg-navy transition">Cancel</button>
+      <button id="cp-yes" class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-pink text-white hover:bg-blush hover:text-deep transition">Create</button>
+    </div>`);
+  const go = () => { const pl = Library.createPlaylist($("#cp-inp").value.trim() || "My Playlist"); Modal.close(); location.hash = "#/playlist/" + pl.id; Toast.show("Playlist created — start adding tracks", "list-plus"); };
+  $("#cp-no").onclick = () => Modal.close();
+  $("#cp-yes").onclick = go;
+  $("#cp-inp").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+}
+
+/* sync all like buttons + library-dependent views on changes */
+function syncLikeButtons() {
+  $$('[data-act="like"]').forEach((b) => {
+    const liked = Library.isLiked(b.dataset.id);
+    b.innerHTML = `<i data-lucide="heart" class="w-4 h-4 ${liked ? "fill-current" : ""}"></i>`;
+    b.classList.toggle("text-pink", liked);
+    b.classList.toggle("text-mist", !liked);
+    if (liked) { b.classList.remove("opacity-0"); b.classList.add("heart-pop"); setTimeout(() => b.classList.remove("heart-pop"), 400); }
+    else b.classList.add("opacity-0");
+    refreshIcons(b);
+  });
+  const t = Player.current;
+  if (t) { likeBtnState($("#pb-like"), Library.isLiked(t.id)); likeBtnState($("#mp-like"), Library.isLiked(t.id)); likeBtnState($("#np-like"), Library.isLiked(t.id)); }
+}
+on("library", () => {
+  renderSidebarPlaylists(); syncLikeButtons();
+  const page = Router.parseHash()[0];
+  if (["library", "liked", "recent", "playlist"].includes(page)) Router.render(true);
+});
+
+/* ================================================================
+   §11b · Developer footer — minimal contact strip
+   Replace the values in DEV with your own details.
+   ================================================================ */
+const DEV = {
+  name: "Amir Mohammad Ahadi",
+  role: "Front-End Developer",
+  photo: "./public/image/FOOTER.jpg",
+  email: "amirahadiweb@gmail.com",
+  phone: "+98 9393871582",
+  phoneHref: "+989393871582",
+  github: "https://github.com/AmirAhadi-web",
+  linkedin: "https://linkedin.com/in/amirmohammad-ahadi",
+  instagram: "https://instagram.com/amirahadi_web",
+};
+
+/* Brand SVGs — inline because Lucide dropped brand icons */
+const BRAND_SVG = {
+  github: '<svg viewBox="0 0 24 24" fill="currentColor" class="w-[17px] h-[17px]"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>',
+  linkedin: '<svg viewBox="0 0 24 24" fill="currentColor" class="w-[17px] h-[17px]"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.063 2.063 0 1 1 0-4.126 2.063 2.063 0 0 1 0 4.126zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>',
+  instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-[17px] h-[17px]"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.3" cy="6.7" r="0.4" fill="currentColor" stroke="none"/></svg>',
+};
+
+function renderDevFooter(view) {
+  view.querySelector("footer[data-dev]")?.remove();   // never allow duplicates
+  const f = document.createElement("footer");
+  f.className = "mt-12 px-4 sm:px-6 lg:px-8 pb-8";
+  f.setAttribute("data-dev", "1");
+  f.innerHTML = `
+  <div class="max-w-[1400px] mx-auto border-t border-line pt-9 flex flex-col items-center text-center">
+    <div class="relative">
+      <img src="${DEV.photo}" onerror="imgFallback(this)" alt="${esc(DEV.name)}" loading="lazy"
+           class="w-14 h-14 rounded-full object-cover bg-navy ring-2 ring-pink/30" />
+    </div>
+    <div class="mt-3">
+      <p class="text-sm font-semibold">${esc(DEV.name)}</p>
+      <p class="text-[11px] text-mist mt-0.5">${esc(DEV.role)}</p>
+    </div>
+    <div class="mt-4 flex items-center gap-2">
+      ${[["github", DEV.github, "GitHub"], ["linkedin", DEV.linkedin, "LinkedIn"], ["instagram", DEV.instagram, "Instagram"]]
+        .map(([ic, href, label]) => `<a href="${href}" target="_blank" rel="noopener" aria-label="${label}" title="${label}"
+          class="w-9 h-9 rounded-full grid place-items-center border border-line text-mist hover:text-white hover:border-pink/60 transition">${BRAND_SVG[ic]}</a>`).join("")}
+    </div>
+    <div class="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[11px] text-mist">
+      <a href="mailto:${DEV.email}" class="inline-flex items-center gap-1.5 hover:text-pink transition"><i data-lucide="mail" class="w-3.5 h-3.5"></i>${esc(DEV.email)}</a>
+      <a href="tel:${DEV.phoneHref}" class="inline-flex items-center gap-1.5 hover:text-pink transition"><i data-lucide="phone" class="w-3.5 h-3.5"></i>${esc(DEV.phone)}</a>
+    </div>
+  </div>`;
+  view.appendChild(f);
+  refreshIcons(f);
+}
+
+/* ================================================================
+   §12 · app.js — boot sequence
+   ================================================================ */
+async function restoreQueue() {
+  const q = Store.data.queue;
+  if (!q || !Array.isArray(q.ids) || !q.ids.length) return;
+  try {
+    const tracks = await Audius.tracksByIds(q.ids);
+    if (!tracks.length) return;
+    const byId = new Map(tracks.map((t) => [t.id, t]));
+    Player.queue = q.ids.map((id) => byId.get(id)).filter(Boolean);
+    if (!Player.queue.length) return;
+    Player.index = clamp(q.index ?? 0, 0, Player.queue.length - 1);
+    Player.ctxName = q.ctx;
+    Player.dirty = true;                    // media loads on first play press
+    emit("queue"); emit("track", Player.current);
+  } catch (_) { /* offline at boot — fine */ }
+}
+
+function bindChrome() {
+  $("#nav-back")?.addEventListener("click", () => history.back());
+  $("#nav-fwd")?.addEventListener("click", () => history.forward());
+  $("#m-search-btn")?.addEventListener("click", () => { location.hash = "#/search"; });
+  $("#sb-create-pl")?.addEventListener("click", () => createPlaylistModal());
+  const gs = $("#global-search");
+  if (gs) gs.addEventListener("input", debounce(() => {
+    const q = gs.value.trim();
+    SearchPage.q = q;
+    if (Router.parseHash()[0] !== "search") { if (q) location.hash = "#/search"; }
+    else SearchPage.run(q);
+  }, 350));
+  /* keep sidebar nav highlight snappy */
+  $$(".navlink, .mnav").forEach((a) => a.addEventListener("click", () => {
+    const key = a.dataset.nav;
+    setTimeout(() => Router.setNav(key), 0);
+  }));
+}
+
+async function boot() {
+  bindPlayerUI();
+  bindShortcuts();
+  bindGlobalDelegation();
+  bindChrome();
+  renderSidebarPlaylists();
+  syncPrefsUI();
+  syncTrackUI();
+  if (!location.hash) location.hash = "#/home";   // hashchange fires → renders → footer
+  else await Router.render();                     // deep-link load → render once
+  refreshIcons();
+  restoreQueue();
+}
+boot();
+</script>
+</body>
+</html>
